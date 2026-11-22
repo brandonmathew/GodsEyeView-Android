@@ -76,9 +76,9 @@ private fun GlobeScreen() {
     var hasToken by remember { mutableStateOf(tokenStore.hasToken()) }
     val initialToken = remember { tokenStore.loadToken() }
     /* v2 Q9 tier 3 + Q2 KeyVault: the user's Google key is loaded from the
-       KeyVault at launch and handed to the globe (GEV.setGoogleKey). There
-       is no Settings field for provider keys yet (issue #5), so in practice
-       this is null until that lands; the boot guard below covers it. */
+       KeyVault at launch and handed to the globe (GEV.setGoogleKey).
+       Provider keys are entered in the Power Up panel (issue #5); changes
+       there are pushed live through controller.setGoogleKey/setIonToken. */
     val keyVault = remember { com.godseyeview.settings.KeyVault(context) }
     val initialGoogleKey = remember {
         keyVault.load(com.godseyeview.settings.ProviderKey.GOOGLE)
@@ -163,6 +163,11 @@ private fun GlobeScreen() {
     val consoleLines = remember { mutableListOf<String>() }
     var showDiagnostics by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showPowerUp by remember { mutableStateOf(false) }
+    var hasGoogleKey by remember { mutableStateOf(initialGoogleKey != null) }
+    var powerUpCount by remember {
+        mutableStateOf(com.godseyeview.settings.powerUpSetCount(context))
+    }
     var showCredits by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var showLayers by remember { mutableStateOf(false) }
@@ -175,6 +180,14 @@ private fun GlobeScreen() {
             registry = com.godseyeview.layerapi.LayerRegistry(),
             controller = controller,
         )
+    }
+    /* First-run mission picker (issue #10, Q20): shown until the user
+       ticks "Don't show this again" (upstream's show policy); the chosen
+       mission's layer preset is stored and applied at every launch. */
+    val firstRunStore = remember { com.godseyeview.firstrun.FirstRunStore(context) }
+    var showFirstRun by remember { mutableStateOf(firstRunStore.shouldShow()) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        layerManager.applyPreset(firstRunStore.presetLayerIds())
     }
     /* Stage 5 in-app updater (issue #54, plan Q23): silent check once per
        launch; Settings can re-check manually, and switching the channel
@@ -273,21 +286,28 @@ private fun GlobeScreen() {
             },
             modifier = Modifier.fillMaxSize(),
         )
-        GlobeChip(
-            text = stringResource(R.string.app_name),
+        // Shell chrome from upstream SceneChromeView.vue (Q23): the
+        // wordmark title bar top-start; ACTIVE STYLE + basemap top-end.
+        com.godseyeview.core.ui.Wordmark(
             modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
         )
-        GlobeChip(
-            text = stringResource(
-                when (basemap) {
-                    Basemap.OSM -> R.string.basemap_osm
-                    Basemap.PHOTOREALISTIC -> R.string.basemap_photorealistic
-                    Basemap.GOOGLE_DIRECT -> R.string.basemap_google_direct
-                    Basemap.ESRI -> R.string.basemap_esri
-                },
-            ),
+        Column(
             modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
-        )
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            GlobeChip(text = stringResource(R.string.shell_active_style))
+            GlobeChip(
+                text = stringResource(
+                    when (basemap) {
+                        Basemap.OSM -> R.string.basemap_osm
+                        Basemap.PHOTOREALISTIC -> R.string.basemap_photorealistic
+                        Basemap.GOOGLE_DIRECT -> R.string.basemap_google_direct
+                        Basemap.ESRI -> R.string.basemap_esri
+                    },
+                ),
+            )
+        }
         Column(
             modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -350,6 +370,13 @@ private fun GlobeScreen() {
                 shareLabel = stringResource(R.string.share_button),
                 onLayers = { showLayers = true },
                 layersLabel = stringResource(R.string.layers_button),
+                // Upstream shows the POWER UP chip while keys are missing.
+                onPowerUp = if (powerUpCount < com.godseyeview.settings.POWER_UP_TOTAL) {
+                    { showPowerUp = true }
+                } else {
+                    null
+                },
+                powerUpLabel = stringResource(R.string.powerup_chip),
             )
             GlobeControlBar(
                 onResetGlobe = {
@@ -477,17 +504,10 @@ private fun GlobeScreen() {
                     com.godseyeview.settings.CacheInfo.clear(context)
                     cacheSizeMb = com.godseyeview.settings.CacheInfo.sizeMb(context)
                 },
+                powerUpSetCount = powerUpCount,
+                onOpenPowerUp = { showPowerUp = true },
+                hasGoogleKey = hasGoogleKey,
                 hasToken = hasToken,
-                onSaveToken = { token ->
-                    tokenStore.saveToken(token)
-                    hasToken = true
-                    controller.setIonToken(token)
-                },
-                onClearToken = {
-                    tokenStore.clearToken()
-                    hasToken = false
-                    controller.setIonToken(null)
-                },
                 updateChannel = updateChannel,
                 onUpdateChannelSelected = { selected ->
                     updateChannel = selected
@@ -509,9 +529,47 @@ private fun GlobeScreen() {
                 onBack = { showSettings = false },
             )
         }
+        if (showPowerUp) {
+            com.godseyeview.settings.PowerUpScreen(
+                onIonTokenChanged = { token ->
+                    hasToken = token != null
+                    controller.setIonToken(token)
+                },
+                onGoogleKeyChanged = { key ->
+                    hasGoogleKey = key != null
+                    controller.setGoogleKey(key)
+                    // Boot-guard mirror: if the Google key was removed
+                    // while Google-direct is the live basemap, fall back
+                    // to Esri so chip and globe cannot disagree.
+                    if (key == null && basemap == Basemap.GOOGLE_DIRECT) {
+                        basemap = Basemap.ESRI
+                        store.saveBasemap(Basemap.ESRI)
+                        controller.setBasemap(Basemap.ESRI)
+                    }
+                },
+                onBack = {
+                    showPowerUp = false
+                    powerUpCount = com.godseyeview.settings.powerUpSetCount(context)
+                },
+            )
+        }
         if (showCredits) {
             com.godseyeview.settings.CreditsScreen(
                 onBack = { showCredits = false },
+            )
+        }
+        if (showFirstRun) {
+            com.godseyeview.firstrun.MissionPickerScreen(
+                initialMission = firstRunStore.chosenMission(),
+                onEnter = { mission, suppress ->
+                    firstRunStore.choose(mission, suppress)
+                    layerManager.applyPreset(mission.layerIds)
+                    showFirstRun = false
+                },
+                onSkip = { suppress ->
+                    firstRunStore.dismiss(suppress)
+                    showFirstRun = false
+                },
             )
         }
         if (showDiagnostics) {
