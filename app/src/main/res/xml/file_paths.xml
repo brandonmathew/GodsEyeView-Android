@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider paths: only the updater's download cache is shared,
+     with the system installer (plan Q23). -->
+<paths>
+    <cache-path name="updates" path="updates/" />
+</paths>

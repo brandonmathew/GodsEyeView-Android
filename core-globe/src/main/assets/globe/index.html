@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Globe</title>
+<link rel="stylesheet" href="../cesium/Widgets/widgets.css">
+<style>
+  html, body, #cesiumContainer { width:100%; height:100%; margin:0; padding:0; overflow:hidden; background:#000; }
+  /* Plan Q32: the small on-globe credit line the tile providers' terms
+     require stays visible. It is the only attribution on the globe itself;
+     the full Credits list lives in Settings. */
+  .cesium-viewer-bottom { display:block !important; }
+  .cesium-credit-textContainer, .cesium-credit-logoContainer { font-size:9px; opacity:0.75; }
+</style>
+<script>
+  window.CESIUM_BASE_URL = 'https://appassets.androidplatform.net/assets/cesium/';
+</script>
+<script src="../cesium/Cesium.js"></script>
+</head>
+<body>
+<div id="cesiumContainer"></div>
+<script src="globe.js"></script>
+</body>
+</html>
