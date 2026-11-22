@@ -35,9 +35,13 @@ import com.godseyeview.core.globe.CameraViewState
 import com.godseyeview.core.globe.CesiumGlobe
 import com.godseyeview.core.globe.GlobeController
 import com.godseyeview.core.globe.LastViewStore
-import com.godseyeview.core.ui.GlobeChip
-import com.godseyeview.core.ui.GlobeControlBar
 import com.godseyeview.core.ui.GodsEyeTheme
+import com.godseyeview.core.ui.glassPanel
+import com.godseyeview.shell.CREDIT_STRIP_HEIGHT
+import com.godseyeview.shell.DOCK_HEIGHT
+import com.godseyeview.shell.GlobeDock
+import com.godseyeview.shell.GlobeTopBar
+import com.godseyeview.shell.MoreSheet
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -171,6 +175,7 @@ private fun GlobeScreen() {
     var showCredits by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var showLayers by remember { mutableStateOf(false) }
+    var showMore by remember { mutableStateOf(false) }
 
     /* Stage 4 (issues #45/#47): the layer registry + fetch manager. Layer
        modules register here at startup; with none registered the manager
@@ -248,6 +253,76 @@ private fun GlobeScreen() {
         }
     }
 
+    fun selectBasemap(selected: Basemap) {
+        basemap = selected
+        store.saveBasemap(selected)
+        controller.setBasemap(selected)
+    }
+
+    fun basemapLabel(selected: Basemap): String = context.getString(
+        when (selected) {
+            Basemap.OSM -> R.string.basemap_osm
+            Basemap.PHOTOREALISTIC -> R.string.basemap_photorealistic
+            Basemap.GOOGLE_DIRECT -> R.string.basemap_google_direct
+            Basemap.ESRI -> R.string.basemap_esri
+        },
+    )
+
+    fun requestLocation() {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.ACCESS_FINE_LOCATION,
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            flyToDeviceLocation()
+        } else {
+            locationPermissionLauncher.launch(
+                android.Manifest.permission.ACCESS_FINE_LOCATION,
+            )
+        }
+    }
+
+    fun shareView() {
+        val lat = String.format(java.util.Locale.US, "%.5f", currentView.latitude)
+        val lon = String.format(java.util.Locale.US, "%.5f", currentView.longitude)
+        val height = String.format(java.util.Locale.US, "%,.0f", currentView.heightMeters)
+        val text = listOf(
+            context.getString(R.string.share_header),
+            "${context.getString(R.string.share_latitude)}: $lat",
+            "${context.getString(R.string.share_longitude)}: $lon",
+            "${context.getString(R.string.share_height)}: $height m",
+            "${context.getString(R.string.share_basemap)}: ${basemapLabel(basemap)}",
+            "https://www.google.com/maps/search/?api=1&query=$lat,$lon",
+        ).joinToString("\n")
+        val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_TEXT, text)
+            putExtra(
+                android.content.Intent.EXTRA_SUBJECT,
+                context.getString(R.string.share_subject),
+            )
+        }
+        context.startActivity(android.content.Intent.createChooser(sendIntent, null))
+    }
+
+    /* Q24 (issue #19): the first-run mission picker is a standalone
+       opaque flow — the globe shell is not composed behind it at all, so
+       nothing can bleed through or overlap it. */
+    if (showFirstRun) {
+        com.godseyeview.firstrun.MissionPickerScreen(
+            initialMission = firstRunStore.chosenMission(),
+            onEnter = { mission, suppress ->
+                firstRunStore.choose(mission, suppress)
+                layerManager.applyPreset(mission.layerIds)
+                showFirstRun = false
+            },
+            onSkip = { suppress ->
+                firstRunStore.dismiss(suppress)
+                showFirstRun = false
+            },
+        )
+        return
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         CesiumGlobe(
             controller = controller,
@@ -284,113 +359,88 @@ private fun GlobeScreen() {
             onEntityPicked = { layerId, entityId ->
                 layerManager.onPicked(layerId, entityId)
             },
-            modifier = Modifier.fillMaxSize(),
+            // The WebView stops above the dock plus a clear strip, so
+            // the Cesium credit line at the page's bottom edge sits in
+            // its own strip and the dock never overlaps it (#19).
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = DOCK_HEIGHT + CREDIT_STRIP_HEIGHT),
         )
-        // Shell chrome from upstream SceneChromeView.vue (Q23): the
-        // wordmark title bar top-start; ACTIVE STYLE + basemap top-end.
-        com.godseyeview.core.ui.Wordmark(
-            modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
+        // Q24 mobile shell: ONE compact top bar — wordmark left, single
+        // basemap/style chip-menu right. No overlapping pills.
+        GlobeTopBar(
+            basemap = basemap,
+            basemapOptions = buildList {
+                add(Basemap.ESRI)
+                add(Basemap.OSM)
+                if (hasToken) add(Basemap.PHOTOREALISTIC)
+                if (hasGoogleKey) add(Basemap.GOOGLE_DIRECT)
+            },
+            onBasemapSelected = { selectBasemap(it) },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(horizontal = 12.dp)
+                .padding(top = 12.dp),
         )
+        // Entity card + transient location status float above the
+        // credit strip, never under the dock.
         Column(
-            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            GlobeChip(text = stringResource(R.string.shell_active_style))
-            GlobeChip(
-                text = stringResource(
-                    when (basemap) {
-                        Basemap.OSM -> R.string.basemap_osm
-                        Basemap.PHOTOREALISTIC -> R.string.basemap_photorealistic
-                        Basemap.GOOGLE_DIRECT -> R.string.basemap_google_direct
-                        Basemap.ESRI -> R.string.basemap_esri
-                    },
-                ),
-            )
-        }
-        Column(
-            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 12.dp)
+                .padding(bottom = DOCK_HEIGHT + CREDIT_STRIP_HEIGHT + 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             com.godseyeview.layers.EntityCard(manager = layerManager)
             if (locationStatus.isNotEmpty()) {
-                GlobeChip(text = locationStatus)
+                Text(
+                    text = locationStatus,
+                    style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
+                    color = com.godseyeview.core.ui.GevColors.TextPrimary,
+                    modifier = Modifier
+                        .glassPanel()
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
             }
-            com.godseyeview.core.ui.GlobeActionBar(
-                onSearch = { showSearch = true },
-                searchLabel = stringResource(R.string.search_button),
-                onMyLocation = {
-                    if (androidx.core.content.ContextCompat.checkSelfPermission(
-                            context, android.Manifest.permission.ACCESS_FINE_LOCATION,
-                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                    ) {
-                        flyToDeviceLocation()
-                    } else {
-                        locationPermissionLauncher.launch(
-                            android.Manifest.permission.ACCESS_FINE_LOCATION,
-                        )
-                    }
+        }
+        // ONE compact single-row dock. Secondary actions live in the
+        // More bottom sheet (see below), not a second slab.
+        GlobeDock(
+            onSearch = { showSearch = true },
+            onLocate = { requestLocation() },
+            onShare = { shareView() },
+            onLayers = { showLayers = true },
+            onMore = { showMore = true },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 12.dp)
+                .padding(bottom = 12.dp),
+        )
+        if (showMore) {
+            MoreSheet(
+                showPowerUp = powerUpCount < com.godseyeview.settings.POWER_UP_TOTAL,
+                powerUpSetCount = powerUpCount,
+                powerUpTotal = com.godseyeview.settings.POWER_UP_TOTAL,
+                onPowerUp = {
+                    showMore = false
+                    showPowerUp = true
                 },
-                myLocationLabel = stringResource(R.string.my_location_button),
-                onShare = {
-                    val lat = String.format(java.util.Locale.US, "%.5f", currentView.latitude)
-                    val lon = String.format(java.util.Locale.US, "%.5f", currentView.longitude)
-                    val height = String.format(
-                        java.util.Locale.US, "%,.0f", currentView.heightMeters,
-                    )
-                    val text = listOf(
-                        context.getString(R.string.share_header),
-                        "${context.getString(R.string.share_latitude)}: $lat",
-                        "${context.getString(R.string.share_longitude)}: $lon",
-                        "${context.getString(R.string.share_height)}: $height m",
-                        "${context.getString(R.string.share_basemap)}: " +
-                            context.getString(
-                                when (basemap) {
-                                    Basemap.OSM -> R.string.basemap_osm
-                                    Basemap.PHOTOREALISTIC -> R.string.basemap_photorealistic
-                                    Basemap.GOOGLE_DIRECT -> R.string.basemap_google_direct
-                                    Basemap.ESRI -> R.string.basemap_esri
-                                },
-                            ),
-                        "https://www.google.com/maps/search/?api=1&query=$lat,$lon",
-                    ).joinToString("\n")
-                    val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(android.content.Intent.EXTRA_TEXT, text)
-                        putExtra(
-                            android.content.Intent.EXTRA_SUBJECT,
-                            context.getString(R.string.share_subject),
-                        )
-                    }
-                    context.startActivity(
-                        android.content.Intent.createChooser(sendIntent, null),
-                    )
-                },
-                shareLabel = stringResource(R.string.share_button),
-                onLayers = { showLayers = true },
-                layersLabel = stringResource(R.string.layers_button),
-                // Upstream shows the POWER UP chip while keys are missing.
-                onPowerUp = if (powerUpCount < com.godseyeview.settings.POWER_UP_TOTAL) {
-                    { showPowerUp = true }
-                } else {
-                    null
-                },
-                powerUpLabel = stringResource(R.string.powerup_chip),
-            )
-            GlobeControlBar(
                 onResetGlobe = {
+                    showMore = false
                     layerManager.select(null)
                     controller.resetGlobe()
                 },
-                resetLabel = stringResource(R.string.reset_globe),
                 onGlobeStatus = {
+                    showMore = false
                     controller.reportDiagnostics()
                     showDiagnostics = true
                 },
-                statusLabel = stringResource(R.string.globe_status),
-                onSettings = { showSettings = true },
-                settingsLabel = stringResource(R.string.settings_button),
+                onSettings = {
+                    showMore = false
+                    showSettings = true
+                },
+                onDismiss = { showMore = false },
             )
         }
         availableUpdate?.let { info ->
@@ -467,20 +517,9 @@ private fun GlobeScreen() {
         }
         if (showSettings) {
             com.godseyeview.settings.SettingsScreen(
-                basemapLabel = stringResource(
-                    when (basemap) {
-                        Basemap.OSM -> R.string.basemap_osm
-                        Basemap.PHOTOREALISTIC -> R.string.basemap_photorealistic
-                        Basemap.GOOGLE_DIRECT -> R.string.basemap_google_direct
-                        Basemap.ESRI -> R.string.basemap_esri
-                    },
-                ),
+                basemapLabel = basemapLabel(basemap),
                 basemap = basemap,
-                onBasemapSelected = { selected ->
-                    basemap = selected
-                    store.saveBasemap(selected)
-                    controller.setBasemap(selected)
-                },
+                onBasemapSelected = { selected -> selectBasemap(selected) },
                 qualityMode = qualityMode,
                 onQualitySelected = { selected ->
                     qualityMode = selected
@@ -558,20 +597,6 @@ private fun GlobeScreen() {
                 onBack = { showCredits = false },
             )
         }
-        if (showFirstRun) {
-            com.godseyeview.firstrun.MissionPickerScreen(
-                initialMission = firstRunStore.chosenMission(),
-                onEnter = { mission, suppress ->
-                    firstRunStore.choose(mission, suppress)
-                    layerManager.applyPreset(mission.layerIds)
-                    showFirstRun = false
-                },
-                onSkip = { suppress ->
-                    firstRunStore.dismiss(suppress)
-                    showFirstRun = false
-                },
-            )
-        }
         if (showDiagnostics) {
             val reportText = buildString {
                 append(diagnostics ?: stringResource(R.string.diagnostics_none))
@@ -605,7 +630,9 @@ private fun GlobeScreen() {
         }
         SnackbarHost(
             hostState = snackbar,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 72.dp),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = DOCK_HEIGHT + CREDIT_STRIP_HEIGHT + 8.dp),
         )
     }
 }
