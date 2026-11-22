@@ -49,11 +49,26 @@ class SettingsStore(context: Context) {
         prefs.edit().putString(KEY_UPDATE_CHANNEL, channel.name).apply()
     }
 
+    /** Optional own Overpass server URL (plan Q16, like the original's
+     *  OVERPASS_UPSTREAMS). Null/blank: Overpass-backed layers run the
+     *  reduced public-Overpass behaviour and say so in the UI. Not a
+     *  secret — a plain preference, set from the Power Up panel. */
+    fun loadOverpassUrl(): String? =
+        prefs.getString(KEY_OVERPASS_URL, null)?.takeIf { it.isNotBlank() }
+
+    fun saveOverpassUrl(url: String?) {
+        prefs.edit().apply {
+            if (url.isNullOrBlank()) remove(KEY_OVERPASS_URL)
+            else putString(KEY_OVERPASS_URL, url.trim())
+        }.apply()
+    }
+
     private companion object {
         const val PREFS_NAME = "settings"
         const val KEY_QUALITY = "quality_mode"
         const val KEY_CACHE_LIMIT_MB = "cache_limit_mb"
         const val KEY_UPDATE_CHANNEL = "update_channel"
+        const val KEY_OVERPASS_URL = "overpass_url"
         const val DEFAULT_CACHE_LIMIT_MB = 250
     }
 }

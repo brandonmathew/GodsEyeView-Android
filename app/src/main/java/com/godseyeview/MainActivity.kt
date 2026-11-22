@@ -76,9 +76,9 @@ private fun GlobeScreen() {
     var hasToken by remember { mutableStateOf(tokenStore.hasToken()) }
     val initialToken = remember { tokenStore.loadToken() }
     /* v2 Q9 tier 3 + Q2 KeyVault: the user's Google key is loaded from the
-       KeyVault at launch and handed to the globe (GEV.setGoogleKey). There
-       is no Settings field for provider keys yet (issue #5), so in practice
-       this is null until that lands; the boot guard below covers it. */
+       KeyVault at launch and handed to the globe (GEV.setGoogleKey).
+       Provider keys are entered in the Power Up panel (issue #5); changes
+       there are pushed live through controller.setGoogleKey/setIonToken. */
     val keyVault = remember { com.godseyeview.settings.KeyVault(context) }
     val initialGoogleKey = remember {
         keyVault.load(com.godseyeview.settings.ProviderKey.GOOGLE)
@@ -163,6 +163,11 @@ private fun GlobeScreen() {
     val consoleLines = remember { mutableListOf<String>() }
     var showDiagnostics by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showPowerUp by remember { mutableStateOf(false) }
+    var hasGoogleKey by remember { mutableStateOf(initialGoogleKey != null) }
+    var powerUpCount by remember {
+        mutableStateOf(com.godseyeview.settings.powerUpSetCount(context))
+    }
     var showCredits by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
     var showLayers by remember { mutableStateOf(false) }
@@ -477,6 +482,9 @@ private fun GlobeScreen() {
                     com.godseyeview.settings.CacheInfo.clear(context)
                     cacheSizeMb = com.godseyeview.settings.CacheInfo.sizeMb(context)
                 },
+                powerUpSetCount = powerUpCount,
+                onOpenPowerUp = { showPowerUp = true },
+                hasGoogleKey = hasGoogleKey,
                 hasToken = hasToken,
                 onSaveToken = { token ->
                     tokenStore.saveToken(token)
@@ -507,6 +515,30 @@ private fun GlobeScreen() {
                     com.godseyeview.settings.QualityMode.AUTO -> ""
                 },
                 onBack = { showSettings = false },
+            )
+        }
+        if (showPowerUp) {
+            com.godseyeview.settings.PowerUpScreen(
+                onIonTokenChanged = { token ->
+                    hasToken = token != null
+                    controller.setIonToken(token)
+                },
+                onGoogleKeyChanged = { key ->
+                    hasGoogleKey = key != null
+                    controller.setGoogleKey(key)
+                    // Boot-guard mirror: if the Google key was removed
+                    // while Google-direct is the live basemap, fall back
+                    // to Esri so chip and globe cannot disagree.
+                    if (key == null && basemap == Basemap.GOOGLE_DIRECT) {
+                        basemap = Basemap.ESRI
+                        store.saveBasemap(Basemap.ESRI)
+                        controller.setBasemap(Basemap.ESRI)
+                    }
+                },
+                onBack = {
+                    showPowerUp = false
+                    powerUpCount = com.godseyeview.settings.powerUpSetCount(context)
+                },
             )
         }
         if (showCredits) {
