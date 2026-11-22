@@ -2,11 +2,11 @@ package com.godseyeview.search
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -15,25 +15,22 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.godseyeview.R
-import com.godseyeview.core.ui.Kicker
 
-/** Search surface styled on upstream v0.3.0's Omnibar (Q23): one field
- *  for places and coordinates, presented as the original's glass search
- *  panel with a mono kicker. The search logic (bundled gazetteer, Photon,
- *  Nominatim, coordinate parsing) is unchanged plumbing from beta.1.
- *  Layer/flight search and typed chat join this field in later stages,
- *  as upstream's omnibar carries them. */
+/** Search (Q24 mobile design, issue #19): a full-screen mobile search
+ *  flow — top app bar, one field for places and coordinates, results as
+ *  full-width rows with 56dp+ touch targets. The search logic (bundled
+ *  gazetteer, Photon, Nominatim, coordinate parsing) is unchanged
+ *  plumbing from beta.1. Layer/flight search and typed chat join this
+ *  field in later stages. */
 @Composable
 fun SearchScreen(
     onResultSelected: (PlaceResult) -> Unit,
@@ -47,26 +44,23 @@ fun SearchScreen(
     val noneText = stringResource(R.string.search_none)
 
     Surface(
-        color = MaterialTheme.colorScheme.background,
+        color = com.godseyeview.core.ui.GevColors.BgDark,
+        contentColor = com.godseyeview.core.ui.GevColors.TextPrimary,
         modifier = modifier.fillMaxSize(),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Kicker(text = stringResource(R.string.search_kicker))
-                    Text(
-                        text = stringResource(R.string.search_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                }
-                TextButton(onClick = onBack) { Text(stringResource(R.string.settings_back)) }
-            }
-            Spacer(Modifier.height(12.dp))
+        Column(modifier = Modifier.fillMaxSize()) {
+            com.godseyeview.core.ui.GevTopBar(
+                title = stringResource(R.string.search_title),
+                subtitle = stringResource(R.string.search_kicker),
+                onBack = onBack,
+                backContentDescription = stringResource(R.string.settings_back),
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp),
+            ) {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -95,18 +89,24 @@ fun SearchScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(min = 56.dp)
                         .clickable { onResultSelected(result) }
                         .padding(vertical = 12.dp),
                 ) {
-                    Text(text = result.name, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = result.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = com.godseyeview.core.ui.GevColors.TextPrimary,
+                    )
                     if (result.detail.isNotEmpty()) {
                         Text(
                             text = result.detail,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = com.godseyeview.core.ui.GevColors.TextSecondary,
                         )
                     }
                 }
+            }
             }
         }
     }

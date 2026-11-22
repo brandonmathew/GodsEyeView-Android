@@ -2,156 +2,151 @@ package com.godseyeview.core.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
-/** Shell chrome modelled on upstream v0.3.0's SceneChromeView.vue and
- *  foundation.css (Q23): glass panels (rgba(12,12,20,0.72), 1dp hairline
- *  border, 16dp radius), the GOD'S EYE VIEW wordmark with the accent on
- *  VIEW, the NO PLACE LEFT BEHIND subtitle, mono kickers, and a glass
- *  command dock. Replaces v1's pill chips and twin pill bars. */
+/** Shared mobile UI primitives (Q24, issue #19). Beta.2's desktop-style
+ *  SceneChrome — floating wordmark pill, separate status pills, and the
+ *  twin glass dock slabs — is deleted; what remains here is the panel
+ *  styling, the mono kicker, a standard top app bar, and the compact
+ *  single-row mobile dock. All layout is designed for phone widths
+ *  (360–412dp) first. */
 
+/** Panel surface for chrome floating over the globe: near-opaque, hairline
+ *  border, 16dp radius. */
 @Composable
 fun Modifier.glassPanel(): Modifier = this
     .clip(RoundedCornerShape(16.dp))
-    .background(GevColors.Glass)
+    .background(GevColors.PanelSolid)
     .border(1.dp, GevColors.GlassBorder, RoundedCornerShape(16.dp))
 
-/** Small letterspaced mono label, e.g. "ACTIVE STYLE", "MISSION CONTROL". */
+/** Small letterspaced mono label, e.g. "MISSION CONTROL · FIRST LAUNCH". */
 @Composable
-fun Kicker(text: String, modifier: Modifier = Modifier) {
+fun Kicker(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: androidx.compose.ui.graphics.Color = GevColors.TextSecondary,
+) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelMedium,
-        color = GevColors.TextSecondary,
+        color = color,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         modifier = modifier,
     )
 }
 
-/** The title bar (SceneChromeView #title-bar): wordmark + subtitle. */
+/** Standard mobile top app bar: optional back arrow, a title (with an
+ *  optional one-line subtitle under it), and a trailing actions slot.
+ *  Fixed 64dp height so every full-screen flow lines up. */
 @Composable
-fun Wordmark(modifier: Modifier = Modifier) {
-    Column(modifier = modifier.glassPanel().padding(horizontal = 14.dp, vertical = 10.dp)) {
-        Text(
-            text = buildAnnotatedString {
-                append("GOD'S EYE ")
-                withStyle(SpanStyle(color = GevColors.Accent)) { append("VIEW") }
-            },
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = GevColors.TextPrimary,
-        )
-        Text(
-            text = "NO PLACE LEFT BEHIND",
-            style = MaterialTheme.typography.labelSmall,
-            color = GevColors.TextSecondary,
-        )
-    }
-}
-
-/** Translucent chip that sits over the globe (basemap status, ACTIVE STYLE). */
-@Composable
-fun GlobeChip(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = GevColors.TextPrimary,
-        modifier = modifier
-            .glassPanel()
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    )
-}
-
-/** A labelled cell of the command dock: mono uppercase, accent when active. */
-@Composable
-private fun DockButton(label: String, onClick: () -> Unit) {
-    TextButton(onClick = onClick) {
-        Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.labelMedium,
-            color = GevColors.TextPrimary,
-        )
-    }
-}
-
-/** Bottom command dock over the globe: the core's actions in one glass
- *  bar, as upstream's command dock. Two rows on phones so nothing
- *  overflows: actions, then camera/system controls. */
-@Composable
-fun GlobeControlBar(
-    onResetGlobe: () -> Unit,
-    resetLabel: String,
+fun GevTopBar(
+    title: String,
     modifier: Modifier = Modifier,
-    onGlobeStatus: (() -> Unit)? = null,
-    statusLabel: String = "",
-    onSettings: (() -> Unit)? = null,
-    settingsLabel: String = "",
+    subtitle: String? = null,
+    onBack: (() -> Unit)? = null,
+    backContentDescription: String = "Back",
+    actions: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
         modifier = modifier
-            .glassPanel()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.Center,
+            .fillMaxWidth()
+            .height(64.dp)
+            .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        DockButton(resetLabel, onResetGlobe)
-        if (onGlobeStatus != null) {
-            DockButton(statusLabel, onGlobeStatus)
-        }
-        if (onSettings != null) {
-            DockButton(settingsLabel, onSettings)
-        }
-    }
-}
-
-@Composable
-fun GlobeActionBar(
-    modifier: Modifier = Modifier,
-    onSearch: (() -> Unit)? = null,
-    searchLabel: String = "",
-    onMyLocation: (() -> Unit)? = null,
-    myLocationLabel: String = "",
-    onShare: (() -> Unit)? = null,
-    shareLabel: String = "",
-    onLayers: (() -> Unit)? = null,
-    layersLabel: String = "",
-    onPowerUp: (() -> Unit)? = null,
-    powerUpLabel: String = "",
-) {
-    Row(
-        modifier = modifier
-            .glassPanel()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (onSearch != null) DockButton(searchLabel, onSearch)
-        if (onMyLocation != null) DockButton(myLocationLabel, onMyLocation)
-        if (onShare != null) DockButton(shareLabel, onShare)
-        if (onLayers != null) DockButton(layersLabel, onLayers)
-        if (onPowerUp != null) {
-            TextButton(onClick = onPowerUp) {
-                Text(
-                    text = powerUpLabel.uppercase(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = GevColors.Accent,
+        if (onBack != null) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = backContentDescription,
+                    tint = GevColors.TextPrimary,
                 )
             }
         }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 8.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = GevColors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = GevColors.TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        actions()
+    }
+}
+
+/** One cell of the mobile dock: icon over a short label. The cell fills
+ *  its share of the dock's width and the full dock height (≥56dp touch
+ *  target); the label is a single line that can never wrap. */
+@Composable
+fun RowScope.DockCell(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    accent: Boolean = false,
+) {
+    val tint = if (accent) GevColors.Accent else GevColors.TextPrimary
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .height(64.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(24.dp),
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = tint,
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+        )
     }
 }

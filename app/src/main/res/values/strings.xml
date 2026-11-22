@@ -152,8 +152,16 @@
     <string name="settings_powerup_title">Power Up — provider keys</string>
     <string name="settings_powerup_summary">%1$d of %2$d provider keys set. The globe flies keyless; every key switches on another real feed.</string>
     <string name="settings_powerup_open">Open Power Up</string>
-    <!-- Q23 UI redo (issue #14): chrome strings for the original's design. -->
+    <!-- Q24 mobile-first UI (issue #19): shell strings. Dock labels are
+         single short words so they can never wrap at phone widths. -->
     <string name="shell_active_style">ACTIVE STYLE · NORMAL</string>
+    <string name="dock_locate">Locate</string>
+    <string name="dock_more">More</string>
+    <string name="shell_wordmark">GOD\'S EYE VIEW</string>
+    <string name="shell_tagline">NO PLACE LEFT BEHIND</string>
+    <string name="shell_basemap_menu">Basemap and style</string>
+    <string name="more_title">Globe</string>
+    <string name="more_powerup_summary">%1$d of %2$d provider keys set</string>
     <string name="settings_kicker">SETTINGS</string>
     <string name="layers_kicker">DATA LAYERS</string>
     <string name="layers_finder_hint">Find a layer…</string>
