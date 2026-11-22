@@ -21,6 +21,7 @@
     <string name="settings_token_clear">Remove token</string>
     <string name="settings_token_note">Free token: cesium.com/ion. Stored encrypted on this phone only; never backed up or sent anywhere except Cesium.</string>
     <string name="basemap_photorealistic">Photorealistic 3D</string>
+    <string name="basemap_google_direct">Google 3D (direct)</string>
     <string name="search_button">Search</string>
     <string name="search_title">Search</string>
     <string name="search_hint">Place name, or lat, lon</string>

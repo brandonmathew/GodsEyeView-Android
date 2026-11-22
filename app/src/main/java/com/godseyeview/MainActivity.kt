@@ -75,6 +75,14 @@ private fun GlobeScreen() {
     val tokenStore = remember { com.godseyeview.settings.TokenStore(context) }
     var hasToken by remember { mutableStateOf(tokenStore.hasToken()) }
     val initialToken = remember { tokenStore.loadToken() }
+    /* v2 Q9 tier 3 + Q2 KeyVault: the user's Google key is loaded from the
+       KeyVault at launch and handed to the globe (GEV.setGoogleKey). There
+       is no Settings field for provider keys yet (issue #5), so in practice
+       this is null until that lands; the boot guard below covers it. */
+    val keyVault = remember { com.godseyeview.settings.KeyVault(context) }
+    val initialGoogleKey = remember {
+        keyVault.load(com.godseyeview.settings.ProviderKey.GOOGLE)
+    }
     var qualityMode by remember {
         mutableStateOf(settingsStore.loadQualityMode())
     }
@@ -233,13 +241,17 @@ private fun GlobeScreen() {
             initialView = initialView,
             // A saved photorealistic basemap without a token cannot load;
             // boot on Esri instead of leaving chip and globe disagreeing.
-            initialBasemap = if (basemap == Basemap.PHOTOREALISTIC && initialToken == null) {
+            initialBasemap = if (
+                (basemap == Basemap.PHOTOREALISTIC && initialToken == null) ||
+                (basemap == Basemap.GOOGLE_DIRECT && initialGoogleKey == null)
+            ) {
                 Basemap.ESRI
             } else {
                 basemap
             },
             initialQualityId = effectiveQuality.id,
             initialIonToken = initialToken,
+            initialGoogleKey = initialGoogleKey,
             onCameraChanged = { view ->
                 currentView = view
                 store.save(view)
@@ -270,6 +282,7 @@ private fun GlobeScreen() {
                 when (basemap) {
                     Basemap.OSM -> R.string.basemap_osm
                     Basemap.PHOTOREALISTIC -> R.string.basemap_photorealistic
+                    Basemap.GOOGLE_DIRECT -> R.string.basemap_google_direct
                     Basemap.ESRI -> R.string.basemap_esri
                 },
             ),
@@ -316,6 +329,7 @@ private fun GlobeScreen() {
                                 when (basemap) {
                                     Basemap.OSM -> R.string.basemap_osm
                                     Basemap.PHOTOREALISTIC -> R.string.basemap_photorealistic
+                                    Basemap.GOOGLE_DIRECT -> R.string.basemap_google_direct
                                     Basemap.ESRI -> R.string.basemap_esri
                                 },
                             ),
@@ -430,6 +444,7 @@ private fun GlobeScreen() {
                     when (basemap) {
                         Basemap.OSM -> R.string.basemap_osm
                         Basemap.PHOTOREALISTIC -> R.string.basemap_photorealistic
+                        Basemap.GOOGLE_DIRECT -> R.string.basemap_google_direct
                         Basemap.ESRI -> R.string.basemap_esri
                     },
                 ),
