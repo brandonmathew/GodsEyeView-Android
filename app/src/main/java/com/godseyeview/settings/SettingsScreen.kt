@@ -46,6 +46,9 @@ fun SettingsScreen(
     hasToken: Boolean = false,
     onSaveToken: (String) -> Unit = {},
     onClearToken: () -> Unit = {},
+    powerUpSetCount: Int = 0,
+    onOpenPowerUp: () -> Unit = {},
+    hasGoogleKey: Boolean = false,
     updateChannel: com.godseyeview.update.UpdateChannel =
         com.godseyeview.update.UpdateChannel.BETA,
     onUpdateChannelSelected: (com.godseyeview.update.UpdateChannel) -> Unit = {},
@@ -80,6 +83,18 @@ fun SettingsScreen(
             TextButton(onClick = onBack) { Text(stringResource(R.string.settings_back)) }
         }
         Spacer(Modifier.height(12.dp))
+        SettingsSection(title = stringResource(R.string.settings_powerup_title)) {
+            Text(
+                text = stringResource(
+                    R.string.settings_powerup_summary, powerUpSetCount, POWER_UP_TOTAL,
+                ),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Spacer(Modifier.height(6.dp))
+            androidx.compose.material3.Button(onClick = onOpenPowerUp) {
+                Text(text = stringResource(R.string.settings_powerup_open))
+            }
+        }
         SettingsSection(title = stringResource(R.string.settings_basemap_title)) {
             RadioOption(
                 label = stringResource(R.string.basemap_esri),
@@ -97,6 +112,17 @@ fun SettingsScreen(
                     selected = basemap == com.godseyeview.core.globe.Basemap.PHOTOREALISTIC,
                     onSelect = {
                         onBasemapSelected(com.godseyeview.core.globe.Basemap.PHOTOREALISTIC)
+                    },
+                )
+            }
+            if (hasGoogleKey) {
+                // Q9 tier 3: direct Google 3D, selectable once a Google
+                // key exists in the KeyVault (set in Power Up, issue #5).
+                RadioOption(
+                    label = stringResource(R.string.basemap_google_direct),
+                    selected = basemap == com.godseyeview.core.globe.Basemap.GOOGLE_DIRECT,
+                    onSelect = {
+                        onBasemapSelected(com.godseyeview.core.globe.Basemap.GOOGLE_DIRECT)
                     },
                 )
             }

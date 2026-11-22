@@ -112,4 +112,44 @@
     <string name="diagnostics_none">No globe data received yet. Wait a few seconds and try again.</string>
     <string name="diagnostics_copy">Copy status</string>
     <string name="diagnostics_close">Close</string>
+    <!-- POWER UP / Provider Settings (issue #5), modelled on upstream
+         ProviderSettingsView.vue + keySetupCore.mjs. -->
+    <string name="powerup_kicker">GROUND STATION · PROVIDER SETTINGS</string>
+    <string name="powerup_title">Power up the globe</string>
+    <string name="powerup_description">The globe already flies keyless. Every key below switches on another real feed — paste one and it is saved encrypted on this phone only, in the Android Keystore. It is never backed up and never sent anywhere except its own provider.</string>
+    <string name="powerup_save">SAVE KEYS</string>
+    <string name="powerup_saved">Keys saved.</string>
+    <string name="powerup_removed">Key removed.</string>
+    <string name="powerup_status_default">The Google Maps key buys the photorealistic planet — everything else stacks on top.</string>
+    <string name="powerup_get_key">GET KEY ↗</string>
+    <string name="powerup_manage">MANAGE ↗</string>
+    <string name="powerup_remove">REMOVE</string>
+    <string name="powerup_globe_side">globe-side</string>
+    <string name="powerup_tier_metered">● metered</string>
+    <string name="powerup_tier_free">● free key</string>
+    <string name="powerup_field_saved">%1$s saved — paste to replace</string>
+    <string name="powerup_field_paste">Paste %1$s</string>
+    <string name="powerup_google_title">GOOGLE MAPS</string>
+    <string name="powerup_google_unlocks">The photorealistic 3D planet, place search + Street View</string>
+    <string name="powerup_openai_title">OPENAI</string>
+    <string name="powerup_openai_unlocks">Voice control + typed chat</string>
+    <string name="powerup_gemini_title">GEMINI</string>
+    <string name="powerup_gemini_unlocks">Gemini Live voice control</string>
+    <string name="powerup_aisstream_title">AISSTREAM</string>
+    <string name="powerup_aisstream_unlocks">Live ships, worldwide</string>
+    <string name="powerup_firms_title">NASA FIRMS</string>
+    <string name="powerup_firms_unlocks">Live active-fire detections</string>
+    <string name="powerup_tomtom_title">TOMTOM</string>
+    <string name="powerup_tomtom_unlocks">Real live traffic (keyless runs a simulation)</string>
+    <string name="powerup_ion_title">CESIUM ION</string>
+    <string name="powerup_ion_unlocks">Photorealistic 3D + Cesium World Terrain</string>
+    <string name="powerup_mapillary_title">MAPILLARY</string>
+    <string name="powerup_mapillary_unlocks">Street-level imagery and coverage in the Street Level layer. Free: register an app in the Mapillary developer dashboard and paste its Client Token</string>
+    <string name="powerup_overpass_title">OVERPASS SERVER</string>
+    <string name="powerup_overpass_unlocks">Optional, not a key. Your own Overpass server runs Traffic, Installations, ALPR and OSM Places in full. Blank runs the reduced public Overpass behaviour, and the app says so.</string>
+    <string name="powerup_overpass_field_label">Overpass server URL (optional)</string>
+    <string name="powerup_chip">⚡ POWER UP</string>
+    <string name="settings_powerup_title">Power Up — provider keys</string>
+    <string name="settings_powerup_summary">%1$d of %2$d provider keys set. The globe flies keyless; every key switches on another real feed.</string>
+    <string name="settings_powerup_open">Open Power Up</string>
 </resources>
