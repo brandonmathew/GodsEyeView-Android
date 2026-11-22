@@ -26,9 +26,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.godseyeview.R
+import com.godseyeview.core.ui.Kicker
 
-/** Stage 3 search overlay (issue #33). Native Compose (plan Q5); the
- *  globe stays alive underneath. Surface wrap for the content color (#27). */
+/** Search surface styled on upstream v0.3.0's Omnibar (Q23): one field
+ *  for places and coordinates, presented as the original's glass search
+ *  panel with a mono kicker. The search logic (bundled gazetteer, Photon,
+ *  Nominatim, coordinate parsing) is unchanged plumbing from beta.1.
+ *  Layer/flight search and typed chat join this field in later stages,
+ *  as upstream's omnibar carries them. */
 @Composable
 fun SearchScreen(
     onResultSelected: (PlaceResult) -> Unit,
@@ -52,11 +57,13 @@ fun SearchScreen(
                 .padding(20.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(R.string.search_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Kicker(text = stringResource(R.string.search_kicker))
+                    Text(
+                        text = stringResource(R.string.search_title),
+                        style = MaterialTheme.typography.headlineSmall,
+                    )
+                }
                 TextButton(onClick = onBack) { Text(stringResource(R.string.settings_back)) }
             }
             Spacer(Modifier.height(12.dp))
@@ -93,7 +100,11 @@ fun SearchScreen(
                 ) {
                     Text(text = result.name, style = MaterialTheme.typography.titleMedium)
                     if (result.detail.isNotEmpty()) {
-                        Text(text = result.detail, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = result.detail,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }

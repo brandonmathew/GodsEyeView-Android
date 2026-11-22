@@ -82,7 +82,7 @@
     <string name="settings_credits_summary">Every provider, dataset and library, with its terms.</string>
     <string name="settings_credits_view">View credits</string>
     <string name="credits_title">Credits</string>
-    <string name="credit_cesiumjs_name">CesiumJS 1.147.0</string>
+    <string name="credit_cesiumjs_name">CesiumJS 1.138.0</string>
     <string name="credit_cesiumjs_terms">3D globe engine, bundled in the app. Apache License 2.0. cesium.com</string>
     <string name="credit_ion_name">Cesium ion</string>
     <string name="credit_ion_terms">Optional streaming service used only with your own token. Cesium ion terms of service apply. cesium.com/ion</string>
@@ -152,4 +152,18 @@
     <string name="settings_powerup_title">Power Up — provider keys</string>
     <string name="settings_powerup_summary">%1$d of %2$d provider keys set. The globe flies keyless; every key switches on another real feed.</string>
     <string name="settings_powerup_open">Open Power Up</string>
+    <!-- Q23 UI redo (issue #14): chrome strings for the original's design. -->
+    <string name="shell_active_style">ACTIVE STYLE · NORMAL</string>
+    <string name="settings_kicker">SETTINGS</string>
+    <string name="layers_kicker">DATA LAYERS</string>
+    <string name="layers_finder_hint">Find a layer…</string>
+    <string name="layers_finder_none">No layers match that search.</string>
+    <string name="search_kicker">OMNIBAR</string>
+    <string name="credits_kicker">CREDITS</string>
+    <string name="credit_cables_name">TeleGeography submarine cables</string>
+    <string name="credit_cables_terms">Submarine cable map data by TeleGeography, licensed CC BY-NC-SA 3.0 — non-commercial use only, attribution required, share alike. submarinecablemap.com</string>
+    <string name="credit_bhote_name">Bhote Koshi flood imagery</string>
+    <string name="credit_bhote_terms">Flood imagery licensed CC BY-NC 4.0 — non-commercial use only, attribution required.</string>
+    <string name="credit_datacenters_name">Datacenters and dams data</string>
+    <string name="credit_datacenters_terms">Compiled from OpenStreetMap data © OpenStreetMap contributors, available under the Open Database License (ODbL).</string>
 </resources>

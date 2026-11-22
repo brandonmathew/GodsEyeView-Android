@@ -278,21 +278,28 @@ private fun GlobeScreen() {
             },
             modifier = Modifier.fillMaxSize(),
         )
-        GlobeChip(
-            text = stringResource(R.string.app_name),
+        // Shell chrome from upstream SceneChromeView.vue (Q23): the
+        // wordmark title bar top-start; ACTIVE STYLE + basemap top-end.
+        com.godseyeview.core.ui.Wordmark(
             modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
         )
-        GlobeChip(
-            text = stringResource(
-                when (basemap) {
-                    Basemap.OSM -> R.string.basemap_osm
-                    Basemap.PHOTOREALISTIC -> R.string.basemap_photorealistic
-                    Basemap.GOOGLE_DIRECT -> R.string.basemap_google_direct
-                    Basemap.ESRI -> R.string.basemap_esri
-                },
-            ),
+        Column(
             modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
-        )
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            GlobeChip(text = stringResource(R.string.shell_active_style))
+            GlobeChip(
+                text = stringResource(
+                    when (basemap) {
+                        Basemap.OSM -> R.string.basemap_osm
+                        Basemap.PHOTOREALISTIC -> R.string.basemap_photorealistic
+                        Basemap.GOOGLE_DIRECT -> R.string.basemap_google_direct
+                        Basemap.ESRI -> R.string.basemap_esri
+                    },
+                ),
+            )
+        }
         Column(
             modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -355,6 +362,13 @@ private fun GlobeScreen() {
                 shareLabel = stringResource(R.string.share_button),
                 onLayers = { showLayers = true },
                 layersLabel = stringResource(R.string.layers_button),
+                // Upstream shows the POWER UP chip while keys are missing.
+                onPowerUp = if (powerUpCount < com.godseyeview.settings.POWER_UP_TOTAL) {
+                    { showPowerUp = true }
+                } else {
+                    null
+                },
+                powerUpLabel = stringResource(R.string.powerup_chip),
             )
             GlobeControlBar(
                 onResetGlobe = {
@@ -486,16 +500,6 @@ private fun GlobeScreen() {
                 onOpenPowerUp = { showPowerUp = true },
                 hasGoogleKey = hasGoogleKey,
                 hasToken = hasToken,
-                onSaveToken = { token ->
-                    tokenStore.saveToken(token)
-                    hasToken = true
-                    controller.setIonToken(token)
-                },
-                onClearToken = {
-                    tokenStore.clearToken()
-                    hasToken = false
-                    controller.setIonToken(null)
-                },
                 updateChannel = updateChannel,
                 onUpdateChannelSelected = { selected ->
                     updateChannel = selected
