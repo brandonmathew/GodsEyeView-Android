@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -17,11 +16,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.godseyeview.R
+import com.godseyeview.core.ui.GevColors
+import com.godseyeview.core.ui.glassPanel
 import com.godseyeview.layerapi.FollowTarget
 
-/** Stage 4 generic detail card (plan Q28, issue #46): rendered by the core
- *  from the layer-supplied Entity - title + card fields, Follow toggle,
- *  Close. Layers never draw their own card. */
+/** Detail card in upstream v0.3.0's context-card presentation (Q23;
+ *  upstream ContextView.vue / EntityCard.vue): a glass panel, the layer
+ *  named as a mono kicker over the title, fields as dim mono labels with
+ *  primary values. Rendered by the core from the layer-supplied Entity —
+ *  layers never draw their own card (unchanged plumbing). */
 @Composable
 fun EntityCard(
     manager: LayerManager,
@@ -32,27 +35,40 @@ fun EntityCard(
         it.layerId == entity.layerId && it.entityId == entity.id
     } == true
     Surface(
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-        shape = RoundedCornerShape(16.dp),
-        modifier = modifier.fillMaxWidth(),
+        color = GevColors.Glass,
+        modifier = modifier.fillMaxWidth().glassPanel(),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = entity.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = entity.layerId.uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = GevColors.Accent,
+                    )
+                    Text(
+                        text = entity.title,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
                 TextButton(onClick = { manager.select(null) }) {
                     Text(stringResource(R.string.card_close))
                 }
             }
             entity.cardFields.forEach { field ->
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "${field.label}: ${field.value}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                Spacer(Modifier.height(6.dp))
+                Row {
+                    Text(
+                        text = field.label.uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = GevColors.TextSecondary,
+                        modifier = Modifier.padding(end = 10.dp),
+                    )
+                    Text(
+                        text = field.value,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
             Spacer(Modifier.height(8.dp))
             TextButton(
