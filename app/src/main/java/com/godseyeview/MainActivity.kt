@@ -181,6 +181,14 @@ private fun GlobeScreen() {
             controller = controller,
         )
     }
+    /* First-run mission picker (issue #10, Q20): shown until the user
+       ticks "Don't show this again" (upstream's show policy); the chosen
+       mission's layer preset is stored and applied at every launch. */
+    val firstRunStore = remember { com.godseyeview.firstrun.FirstRunStore(context) }
+    var showFirstRun by remember { mutableStateOf(firstRunStore.shouldShow()) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        layerManager.applyPreset(firstRunStore.presetLayerIds())
+    }
     /* Stage 5 in-app updater (issue #54, plan Q23): silent check once per
        launch; Settings can re-check manually, and switching the channel
        re-checks immediately. */
@@ -548,6 +556,20 @@ private fun GlobeScreen() {
         if (showCredits) {
             com.godseyeview.settings.CreditsScreen(
                 onBack = { showCredits = false },
+            )
+        }
+        if (showFirstRun) {
+            com.godseyeview.firstrun.MissionPickerScreen(
+                initialMission = firstRunStore.chosenMission(),
+                onEnter = { mission, suppress ->
+                    firstRunStore.choose(mission, suppress)
+                    layerManager.applyPreset(mission.layerIds)
+                    showFirstRun = false
+                },
+                onSkip = { suppress ->
+                    firstRunStore.dismiss(suppress)
+                    showFirstRun = false
+                },
             )
         }
         if (showDiagnostics) {

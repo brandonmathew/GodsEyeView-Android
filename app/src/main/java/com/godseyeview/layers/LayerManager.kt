@@ -46,6 +46,18 @@ class LayerManager(
 
     fun isEnabled(layerId: String): Boolean = enabled[layerId] == true
 
+    /** First-run mission preset (issue #10): enable every registered
+     *  layer whose id is in the preset. Ids with no registered layer yet
+     *  are simply not matched — the stored preset is re-applied at every
+     *  launch, so layers pick it up as they register in later stages. */
+    fun applyPreset(layerIds: Collection<String>) {
+        for (layer in registry.all()) {
+            if (layer.id in layerIds && !isEnabled(layer.id)) {
+                setEnabled(layer, true)
+            }
+        }
+    }
+
     fun setEnabled(layer: Layer, on: Boolean) {
         enabled[layer.id] = on
         if (on) {

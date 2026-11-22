@@ -166,4 +166,21 @@
     <string name="credit_bhote_terms">Flood imagery licensed CC BY-NC 4.0 — non-commercial use only, attribution required.</string>
     <string name="credit_datacenters_name">Datacenters and dams data</string>
     <string name="credit_datacenters_terms">Compiled from OpenStreetMap data © OpenStreetMap contributors, available under the Open Database License (ODbL).</string>
+    <!-- First-run mission picker (issue #10), from upstream WelcomeView.vue. -->
+    <string name="firstrun_kicker">MISSION CONTROL · FIRST LAUNCH</string>
+    <string name="firstrun_title">Welcome to God\'s Eye View</string>
+    <string name="firstrun_lead">It feels like a forbidden cockpit — then you realize the sources are public and the data is real.</string>
+    <string name="firstrun_start_heading">WHERE DO YOU WANT TO START?</string>
+    <string name="firstrun_live_title">LIVE CONTACTS</string>
+    <string name="firstrun_live_sub">Live flights and ships, worldwide</string>
+    <string name="firstrun_space_title">SPACE MISSIONS</string>
+    <string name="firstrun_space_sub">Launches, spacecraft and orbital context</string>
+    <string name="firstrun_environmental_title">ENVIRONMENTAL</string>
+    <string name="firstrun_environmental_sub">Live earthquakes and active fires, from USGS and NASA</string>
+    <string name="firstrun_explore_title">EXPLORE MANUALLY</string>
+    <string name="firstrun_explore_sub">Begin with a clean globe</string>
+    <string name="firstrun_change_later">Pick one to begin with. You can change everything later.</string>
+    <string name="firstrun_suppress">Don\'t show this again</string>
+    <string name="firstrun_enter">ENTER GOD MODE</string>
+    <string name="firstrun_skip">SKIP</string>
 </resources>
