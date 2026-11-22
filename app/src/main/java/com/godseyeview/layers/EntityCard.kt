@@ -20,11 +20,12 @@ import com.godseyeview.core.ui.GevColors
 import com.godseyeview.core.ui.glassPanel
 import com.godseyeview.layerapi.FollowTarget
 
-/** Detail card in upstream v0.3.0's context-card presentation (Q23;
- *  upstream ContextView.vue / EntityCard.vue): a glass panel, the layer
- *  named as a mono kicker over the title, fields as dim mono labels with
- *  primary values. Rendered by the core from the layer-supplied Entity —
- *  layers never draw their own card (unchanged plumbing). */
+/** Detail card (Q24 mobile design, issue #19): a near-opaque panel
+ *  anchored above the dock, the layer named as a mono kicker over the
+ *  title, fields as dim mono labels with primary values — the original's
+ *  content model in a phone-sized card. Rendered by the core from the
+ *  layer-supplied Entity — layers never draw their own card (unchanged
+ *  plumbing). */
 @Composable
 fun EntityCard(
     manager: LayerManager,
@@ -35,7 +36,8 @@ fun EntityCard(
         it.layerId == entity.layerId && it.entityId == entity.id
     } == true
     Surface(
-        color = GevColors.Glass,
+        color = GevColors.PanelSolid,
+        contentColor = GevColors.TextPrimary,
         modifier = modifier.fillMaxWidth().glassPanel(),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -49,6 +51,7 @@ fun EntityCard(
                     Text(
                         text = entity.title,
                         style = MaterialTheme.typography.titleMedium,
+                        color = GevColors.TextPrimary,
                     )
                 }
                 TextButton(onClick = { manager.select(null) }) {
@@ -67,6 +70,7 @@ fun EntityCard(
                     Text(
                         text = field.value,
                         style = MaterialTheme.typography.bodyMedium,
+                        color = GevColors.TextPrimary,
                     )
                 }
             }

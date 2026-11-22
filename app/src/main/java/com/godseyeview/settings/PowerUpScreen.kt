@@ -34,19 +34,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.godseyeview.R
 import com.godseyeview.core.ui.GevColors
+import com.godseyeview.core.ui.GevTopBar
 
-/** POWER UP — Provider Settings, modelled on upstream v0.3.0's
- *  ProviderSettingsView.vue + keySetupCore.mjs (issue #5, Q23): the same
- *  rows in the same order, the same "unlocks" wording, tier tags and the
- *  same status line. Android differences: keys are written through
- *  [KeyVault] / [TokenStore] (AES-GCM, Android Keystore) instead of a
- *  server config file, there is no server restart, and the ChatGPT OAuth
- *  toggle is absent — Codex OAuth voice is dropped on Android (Q13).
- *  The optional Overpass server URL (Q16) rides at the bottom as a
- *  non-key row: it is a plain preference in [SettingsStore]. */
+/** POWER UP — Provider Settings (issue #5 content; Q24 mobile design,
+ *  issue #19). The rows are the original's, in the original's order, with
+ *  the original's "unlocks" wording and tier tags. The layout is a
+ *  mobile flow: a top app bar, a scrollable list of provider cards, and
+ *  a sticky bottom bar carrying the status line and SAVE KEYS, so Save
+ *  is always reachable. Android differences from upstream: keys are
+ *  written through [KeyVault] / [TokenStore] (AES-GCM, Android Keystore)
+ *  instead of a server config file, there is no server restart, and the
+ *  ChatGPT OAuth toggle is absent — Codex OAuth voice is dropped on
+ *  Android (Q13). The optional Overpass server URL (Q16) rides at the
+ *  bottom as a non-key card: it is a plain preference in [SettingsStore]. */
 private data class ProviderRow(
     val id: String,
     val titleRes: Int,
@@ -118,8 +122,7 @@ private val PROVIDER_ROWS = listOf(
 )
 
 /** How many of the panel's provider keys are currently stored. Drives the
- *  POWER UP chip on the globe (upstream shows the chip while keys are
- *  missing). */
+ *  POWER UP row in the globe's More sheet (shown while keys are missing). */
 fun powerUpSetCount(context: android.content.Context): Int {
     val vault = KeyVault(context)
     var count = if (TokenStore(context).hasToken()) 1 else 0
@@ -155,120 +158,146 @@ fun PowerUpScreen(
         setSnapshot = PROVIDER_ROWS.map { rowIsSet(it) }
     }
 
+    fun saveAll() {
+        PROVIDER_ROWS.forEach { row ->
+            val value = drafts[row.id]?.trim().orEmpty()
+            if (value.isEmpty()) return@forEach
+            if (row.vaultKey != null) {
+                keyVault.save(row.vaultKey, value)
+                if (row.vaultKey == ProviderKey.GOOGLE) {
+                    onGoogleKeyChanged(value)
+                }
+            } else {
+                tokenStore.saveToken(value)
+                onIonTokenChanged(value)
+            }
+            drafts.remove(row.id)
+        }
+        settingsStore.saveOverpassUrl(overpassDraft.trim().ifEmpty { null })
+        refreshSnapshot()
+        status = savedText
+    }
+
     Surface(
-        color = MaterialTheme.colorScheme.background,
+        color = GevColors.BgDark,
+        contentColor = GevColors.TextPrimary,
         modifier = modifier.fillMaxSize(),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            GevTopBar(
+                title = stringResource(R.string.powerup_title),
+                subtitle = stringResource(R.string.powerup_kicker),
+                onBack = onBack,
+                backContentDescription = stringResource(R.string.settings_back),
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+            ) {
                 Text(
-                    text = stringResource(R.string.powerup_kicker),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = GevColors.Accent,
-                    modifier = Modifier.weight(1f),
+                    text = stringResource(R.string.powerup_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = GevColors.TextSecondary,
                 )
-                TextButton(onClick = onBack) { Text(stringResource(R.string.settings_back)) }
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.powerup_title),
-                style = MaterialTheme.typography.headlineSmall,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = stringResource(R.string.powerup_description),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(16.dp))
 
-            PROVIDER_ROWS.forEachIndexed { index, row ->
-                val isSet = setSnapshot.getOrElse(index) { false }
-                ProviderKeyRow(
-                    row = row,
-                    isSet = isSet,
-                    draft = drafts[row.id] ?: "",
-                    onDraftChange = { drafts[row.id] = it },
-                    onGetKey = {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(row.getUrl)),
-                        )
-                    },
-                    onRemove = {
-                        if (row.vaultKey != null) {
-                            keyVault.clear(row.vaultKey)
-                            if (row.vaultKey == ProviderKey.GOOGLE) onGoogleKeyChanged(null)
-                        } else {
-                            tokenStore.clearToken()
-                            onIonTokenChanged(null)
-                        }
-                        drafts.remove(row.id)
-                        refreshSnapshot()
-                        status = removedText
-                    },
-                )
-                Spacer(Modifier.height(14.dp))
-            }
-
-            // Q16: optional own Overpass server. Not a key — a plain URL
-            // preference; blank means reduced public-Overpass behaviour.
-            Text(
-                text = stringResource(R.string.powerup_overpass_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = stringResource(R.string.powerup_overpass_unlocks),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(6.dp))
-            OutlinedTextField(
-                value = overpassDraft,
-                onValueChange = { overpassDraft = it },
-                label = { Text(stringResource(R.string.powerup_overpass_field_label)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(18.dp))
-            Button(
-                onClick = {
-                    PROVIDER_ROWS.forEach { row ->
-                        val value = drafts[row.id]?.trim().orEmpty()
-                        if (value.isEmpty()) return@forEach
-                        if (row.vaultKey != null) {
-                            keyVault.save(row.vaultKey, value)
-                            if (row.vaultKey == ProviderKey.GOOGLE) {
-                                onGoogleKeyChanged(value)
+                PROVIDER_ROWS.forEachIndexed { index, row ->
+                    val isSet = setSnapshot.getOrElse(index) { false }
+                    ProviderKeyCard(
+                        row = row,
+                        isSet = isSet,
+                        draft = drafts[row.id] ?: "",
+                        onDraftChange = { drafts[row.id] = it },
+                        onGetKey = {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(row.getUrl)),
+                            )
+                        },
+                        onRemove = {
+                            if (row.vaultKey != null) {
+                                keyVault.clear(row.vaultKey)
+                                if (row.vaultKey == ProviderKey.GOOGLE) {
+                                    onGoogleKeyChanged(null)
+                                }
+                            } else {
+                                tokenStore.clearToken()
+                                onIonTokenChanged(null)
                             }
-                        } else {
-                            tokenStore.saveToken(value)
-                            onIonTokenChanged(value)
-                        }
-                        drafts.remove(row.id)
-                    }
-                    settingsStore.saveOverpassUrl(overpassDraft.trim().ifEmpty { null })
-                    refreshSnapshot()
-                    status = savedText
-                },
+                            drafts.remove(row.id)
+                            refreshSnapshot()
+                            status = removedText
+                        },
+                    )
+                    Spacer(Modifier.height(12.dp))
+                }
+
+                // Q16: optional own Overpass server. Not a key — a plain
+                // URL preference; blank means reduced public-Overpass
+                // behaviour.
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(GevColors.CardBg, RoundedCornerShape(16.dp))
+                        .border(1.dp, GevColors.GlassBorder, RoundedCornerShape(16.dp))
+                        .padding(16.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.powerup_overpass_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = GevColors.TextPrimary,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.powerup_overpass_unlocks),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = GevColors.TextSecondary,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = overpassDraft,
+                        onValueChange = { overpassDraft = it },
+                        label = {
+                            Text(stringResource(R.string.powerup_overpass_field_label))
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+            // Sticky bottom bar: status line + SAVE KEYS, always reachable.
+            Surface(
+                color = GevColors.MenuBg,
+                contentColor = GevColors.TextPrimary,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text(stringResource(R.string.powerup_save)) }
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = status ?: stringResource(R.string.powerup_status_default),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    Text(
+                        text = status ?: stringResource(R.string.powerup_status_default),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = GevColors.TextSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = { saveAll() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                    ) { Text(stringResource(R.string.powerup_save)) }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun ProviderKeyRow(
+private fun ProviderKeyCard(
     row: ProviderRow,
     isSet: Boolean,
     draft: String,
@@ -279,9 +308,9 @@ private fun ProviderKeyRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(GevColors.Glass, RoundedCornerShape(16.dp))
+            .background(GevColors.CardBg, RoundedCornerShape(16.dp))
             .border(1.dp, GevColors.GlassBorder, RoundedCornerShape(16.dp))
-            .padding(14.dp),
+            .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -296,6 +325,9 @@ private fun ProviderKeyRow(
             Text(
                 text = stringResource(row.titleRes),
                 style = MaterialTheme.typography.titleMedium,
+                color = GevColors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             Text(
@@ -303,28 +335,22 @@ private fun ProviderKeyRow(
                 style = MaterialTheme.typography.labelSmall,
                 color = GevColors.Accent,
             )
-            TextButton(onClick = onGetKey) {
-                Text(
-                    stringResource(
-                        if (isSet) R.string.powerup_manage else R.string.powerup_get_key,
-                    ),
-                )
-            }
         }
         if (row.globeSide) {
+            Spacer(Modifier.height(2.dp))
             Text(
                 text = stringResource(R.string.powerup_globe_side),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = GevColors.TextSecondary,
             )
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             text = stringResource(row.unlocksRes),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = GevColors.TextSecondary,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         OutlinedTextField(
             value = draft,
             onValueChange = onDraftChange,
@@ -341,9 +367,22 @@ private fun ProviderKeyRow(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        if (isSet) {
-            TextButton(onClick = onRemove) {
-                Text(stringResource(R.string.powerup_remove))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isSet) {
+                TextButton(onClick = onRemove) {
+                    Text(stringResource(R.string.powerup_remove))
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = onGetKey) {
+                Text(
+                    stringResource(
+                        if (isSet) R.string.powerup_manage else R.string.powerup_get_key,
+                    ),
+                )
             }
         }
     }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -14,7 +15,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,7 +26,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.godseyeview.R
 import com.godseyeview.core.ui.GevColors
-import com.godseyeview.core.ui.Kicker
 import com.godseyeview.layerapi.FetchState
 import com.godseyeview.layerapi.Layer
 import java.text.SimpleDateFormat
@@ -95,26 +94,23 @@ fun LayerPanel(
     val grouped = visible.groupBy { groupOf(it) }
         .entries.sortedBy { groupOrder(it.key) }
     Surface(
-        color = MaterialTheme.colorScheme.background,
+        color = GevColors.BgDark,
+        contentColor = GevColors.TextPrimary,
         modifier = modifier.fillMaxSize(),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Kicker(text = stringResource(R.string.layers_kicker))
-                    Text(
-                        text = stringResource(R.string.layers_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                }
-                TextButton(onClick = onBack) { Text(stringResource(R.string.settings_back)) }
-            }
-            Spacer(Modifier.height(12.dp))
+        Column(modifier = Modifier.fillMaxSize()) {
+            com.godseyeview.core.ui.GevTopBar(
+                title = stringResource(R.string.layers_title),
+                subtitle = stringResource(R.string.layers_kicker),
+                onBack = onBack,
+                backContentDescription = stringResource(R.string.settings_back),
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp),
+            ) {
             OutlinedTextField(
                 value = finder,
                 onValueChange = { finder = it },
@@ -147,6 +143,7 @@ fun LayerPanel(
                     Spacer(Modifier.height(8.dp))
                 }
             }
+            }
         }
     }
 }
@@ -156,20 +153,27 @@ private fun LayerRow(layer: Layer, manager: LayerManager) {
     val enabled = manager.isEnabled(layer.id)
     val state = manager.states[layer.id]
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = layer.title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = layer.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = GevColors.TextPrimary,
+            )
             Text(
                 text = stateText(enabled, state),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = GevColors.TextSecondary,
             )
             Text(
                 text = layer.credit,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = GevColors.TextSecondary,
             )
         }
         Switch(
