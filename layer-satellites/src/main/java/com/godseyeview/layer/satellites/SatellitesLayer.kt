@@ -4,6 +4,8 @@ import com.godseyeview.layerapi.Layer
 import com.godseyeview.layerapi.LayerDataSource
 import com.godseyeview.layerapi.LayerSetting
 import com.godseyeview.layerapi.QualityProfileHolder
+import com.godseyeview.layerapi.ViewportState
+import com.godseyeview.layerapi.VisibleCap
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.hours
@@ -72,6 +74,24 @@ internal fun buildClassesJson(visibility: Map<String, Boolean>): String {
     return root.toString()
 }
 
+/** The viewport message pushed to satellites.js (Q25):
+ *  {"type":"viewport","global":true} or
+ *  {"type":"viewport","lat":..,"lon":..,"radiusDeg":..} — the JS module
+ *  propagates/renders only satellites inside the cap between refilters. */
+internal fun buildViewportJson(filterCap: VisibleCap?): String {
+    val root = buildJsonObject {
+        put("type", "viewport")
+        if (filterCap == null || filterCap.isGlobal) {
+            put("global", true)
+        } else {
+            put("lat", filterCap.centerLatitude)
+            put("lon", filterCap.centerLongitude)
+            put("radiusDeg", filterCap.radiusDeg)
+        }
+    }
+    return root.toString()
+}
+
 /** Satellites (Stage 2, issue #27) — fetches and caches CelesTrak TLEs
  *  under [cacheDir] and pushes the catalog to the WebView's
  *  satellites.js module through [catalogSink] (a JSON payload for
@@ -90,6 +110,20 @@ class SatellitesLayer(
     override val dataSource: LayerDataSource = LayerDataSource {
         loadCatalogIfNeeded()
         emptyList()
+    }
+
+    /** Renders in its JS module (issue #40: the core must not
+     *  drawable-render this layer — see the Layer API contract). */
+    override val rendersViaJsModule: Boolean = true
+
+    /** Q25 (issue #40): this layer renders in the WebView, so the core
+     *  drawable filter cannot cull it — instead the core pushes each
+     *  new filter cap here and the JS module re-derives its propagated
+     *  subset. (The drawable path returns nothing for this layer.) */
+    override val viewportFiltered: Boolean = true
+
+    override fun onViewportChanged(filterCap: VisibleCap?) {
+        catalogSink(buildViewportJson(filterCap))
     }
 
     private val classVisibility = ConcurrentHashMap<String, Boolean>().apply {
@@ -111,6 +145,10 @@ class SatellitesLayer(
         if (id !in DEFAULT_SATELLITE_CLASSES) return
         classVisibility[id] = value
         catalogSink(buildClassesJson(classVisibility))
+        // Q25: the JS subset is cap x visible classes — re-push the
+        // viewport so toggling a class re-derives the subset at once
+        // instead of waiting for the next camera refilter.
+        catalogSink(buildViewportJson(ViewportState.filterCap))
     }
 
     private fun metaFile(): File = File(cacheDir, "catalog-meta.txt")
@@ -177,5 +215,8 @@ class SatellitesLayer(
 
         catalogSink(buildCatalogJson(catalog, generatedAtMs))
         catalogSink(buildClassesJson(classVisibility))
+        // Q25: a fresh catalog starts unfiltered in the JS module;
+        // immediately re-apply the current filter cap.
+        catalogSink(buildViewportJson(ViewportState.filterCap))
     }
 }
