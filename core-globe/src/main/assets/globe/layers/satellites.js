@@ -49,6 +49,13 @@
   var collection = null;
   var timer = null;
   var totalCount = 0;
+  /* Viewport filtering (Q25, issue #40): null = no cap (render all).
+     Otherwise {lat, lon, radiusDeg} — the core's filter cap (camera
+     horizon x quality-profile margin). Between refilters only sats
+     flagged inSubset are propagated; a refilter (viewport message)
+     re-derives the subset with one full propagation pass. */
+  var viewport = null;
+  var subsetCount = 0;
 
   function klassFor(name, group, norad) {
     var upper = String(name || '').toUpperCase();
@@ -66,6 +73,69 @@
     return 'probes';
   }
 
+  /* Great-circle angular distance in degrees (unit-vector dot —
+     the same test the Kotlin core applies to drawable layers). */
+  function angularDistDeg(lat1, lon1, lat2, lon2) {
+    var p1 = lat1 * Math.PI / 180;
+    var p2 = lat2 * Math.PI / 180;
+    var l1 = lon1 * Math.PI / 180;
+    var l2 = lon2 * Math.PI / 180;
+    var dot = Math.sin(p1) * Math.sin(p2) +
+      Math.cos(p1) * Math.cos(p2) * Math.cos(l1 - l2);
+    if (dot > 1) dot = 1;
+    if (dot < -1) dot = -1;
+    return Math.acos(dot) * 180 / Math.PI;
+  }
+
+  function inViewport(lat, lon) {
+    if (!viewport) return true;
+    return angularDistDeg(viewport.lat, viewport.lon, lat, lon) <=
+      viewport.radiusDeg;
+  }
+
+  /* Propagate one sat and update its point + lastGeo. Returns the
+     geodetic fix, or null when propagation failed (point hidden). */
+  function updateSat(sat, now, gmst) {
+    try {
+      var pv = satellite.propagate(sat.satrec, now);
+      if (!pv || !pv.position ||
+          typeof pv.position.x === 'boolean' ||
+          typeof pv.position.x !== 'number' ||
+          isNaN(pv.position.x)) {
+        if (sat.point) sat.point.show = false;
+        sat.lastGeo = null;
+        return null;
+      }
+      var geo = satellite.eciToGeodetic(pv.position, gmst);
+      var lat = satellite.degreesLat(geo.latitude);
+      // Vendored satellite.js exposes degreesLong (degreesLng in
+      // some builds); guard both names.
+      var degreesLngFn = satellite.degreesLng || satellite.degreesLong;
+      var lon = degreesLngFn(geo.longitude);
+      var altM = geo.height * 1000;
+      sat.point.position = Cesium.Cartesian3.fromDegrees(lon, lat, altM);
+      var velKmS = null;
+      if (pv.velocity &&
+          typeof pv.velocity.x === 'number' &&
+          typeof pv.velocity.y === 'number' &&
+          typeof pv.velocity.z === 'number') {
+        velKmS = Math.hypot(pv.velocity.x, pv.velocity.y, pv.velocity.z);
+      }
+      sat.lastGeo = {
+        lat: lat,
+        lon: lon,
+        altKm: geo.height,
+        velKmS: velKmS
+      };
+      sat.point.show = visibility[sat.klass] !== false;
+      return sat.lastGeo;
+    } catch (e) {
+      if (sat.point) sat.point.show = false;
+      sat.lastGeo = null;
+      return null;
+    }
+  }
+
   function tick() {
     if (!collection) return;
     var now = new Date();
@@ -76,43 +146,66 @@
       return;
     }
     sats.forEach(function (sat) {
-      try {
-        var pv = satellite.propagate(sat.satrec, now);
-        if (!pv || !pv.position ||
-            typeof pv.position.x === 'boolean' ||
-            typeof pv.position.x !== 'number' ||
-            isNaN(pv.position.x)) {
-          if (sat.point) sat.point.show = false;
-          sat.lastGeo = null;
-          return;
-        }
-        var geo = satellite.eciToGeodetic(pv.position, gmst);
-        var lat = satellite.degreesLat(geo.latitude);
-        // Vendored satellite.js exposes degreesLong (degreesLng in
-        // some builds); guard both names.
-        var degreesLngFn = satellite.degreesLng || satellite.degreesLong;
-        var lon = degreesLngFn(geo.longitude);
-        var altM = geo.height * 1000;
-        sat.point.position = Cesium.Cartesian3.fromDegrees(lon, lat, altM);
-        var velKmS = null;
-        if (pv.velocity &&
-            typeof pv.velocity.x === 'number' &&
-            typeof pv.velocity.y === 'number' &&
-            typeof pv.velocity.z === 'number') {
-          velKmS = Math.hypot(pv.velocity.x, pv.velocity.y, pv.velocity.z);
-        }
-        sat.lastGeo = {
-          lat: lat,
-          lon: lon,
-          altKm: geo.height,
-          velKmS: velKmS
-        };
-        sat.point.show = visibility[sat.klass] !== false;
-      } catch (e) {
+      // Q25: between refilters only the in-cap subset is propagated.
+      if (!sat.inSubset) return;
+      updateSat(sat, now, gmst);
+    });
+  }
+
+  /* Refilter: one full propagation pass re-derives the subset from
+     the current viewport. Sats outside the cap are hidden and skipped
+     by tick() until the next refilter includes them again. A sat in
+     the subset that drifts out between refilters keeps rendering —
+     the core's margin absorbs the drift. */
+  function applyViewport() {
+    if (!collection) return;
+    var now = new Date();
+    var gmst;
+    try {
+      gmst = satellite.gstime(now);
+    } catch (e) {
+      return;
+    }
+    subsetCount = 0;
+    sats.forEach(function (sat) {
+      var geo = updateSat(sat, now, gmst);
+      // Subset = inside the cap AND in a class the user has on: a
+      // hidden class (Starlink by default — the 10k-sat shell) costs
+      // no propagation at all. Toggling a class re-pushes the
+      // viewport from Kotlin, which re-derives the subset here.
+      sat.inSubset = !!geo && visibility[sat.klass] !== false &&
+        inViewport(geo.lat, geo.lon);
+      if (!sat.inSubset) {
         if (sat.point) sat.point.show = false;
-        sat.lastGeo = null;
+      } else {
+        subsetCount++;
       }
     });
+  }
+
+  function handleViewport(payload) {
+    if (payload.global || typeof payload.lat !== 'number' ||
+        typeof payload.lon !== 'number' ||
+        typeof payload.radiusDeg !== 'number') {
+      viewport = null;
+    } else {
+      viewport = {
+        lat: payload.lat,
+        lon: payload.lon,
+        radiusDeg: payload.radiusDeg
+      };
+    }
+    if (!viewport) {
+      // Back to global: every visible-class sat re-enters the subset.
+      subsetCount = 0;
+      sats.forEach(function (sat) {
+        sat.inSubset = visibility[sat.klass] !== false;
+        if (sat.inSubset) subsetCount++;
+      });
+      tick();
+      return;
+    }
+    applyViewport();
   }
 
   function startTimer() {
@@ -136,6 +229,7 @@
     collection = null;
     sats.clear();
     totalCount = 0;
+    subsetCount = 0;
   }
 
   function handleCatalog(payload) {
@@ -173,12 +267,26 @@
           point: point,
           epochMs: entry.epochMs || null,
           lastGeo: null,
-          lastPos: null
+          lastPos: null,
+          inSubset: true
         });
       });
     });
     totalCount = sats.size;
+    subsetCount = totalCount;
     startTimer();
+    if (viewport) {
+      // Q25: if a viewport arrived before the catalog, apply it now.
+      applyViewport();
+    } else {
+      // No cap: the subset is every visible-class sat (hidden classes
+      // are not propagated; their points are already show=false).
+      subsetCount = 0;
+      sats.forEach(function (sat) {
+        sat.inSubset = visibility[sat.klass] !== false;
+        if (sat.inSubset) subsetCount++;
+      });
+    }
   }
 
   function handleClasses(payload) {
@@ -187,7 +295,10 @@
       if (typeof incoming[key] === 'boolean') visibility[key] = incoming[key];
     });
     sats.forEach(function (sat) {
-      if (sat.point) sat.point.show = visibility[sat.klass] !== false;
+      // Q25: a class toggle must not resurrect an out-of-cap sat.
+      if (sat.point) {
+        sat.point.show = sat.inSubset && visibility[sat.klass] !== false;
+      }
     });
   }
 
@@ -199,6 +310,7 @@
     if (!data || !data.type) return;
     if (data.type === 'catalog') handleCatalog(data);
     else if (data.type === 'classes') handleClasses(data);
+    else if (data.type === 'viewport') handleViewport(data);
   }
 
   function onPick(entityId) {
@@ -264,6 +376,8 @@
     onMessage: onMessage,
     onClear: onClear,
     onPick: onPick,
-    count: function () { return totalCount; }
+    /* Q25: the count is the RENDERED (in-cap subset) count — the
+       honest number for what is on screen — not the catalog total. */
+    count: function () { return subsetCount; }
   };
 })();
