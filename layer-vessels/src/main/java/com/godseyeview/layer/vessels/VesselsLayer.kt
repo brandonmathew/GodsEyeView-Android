@@ -7,7 +7,10 @@ import com.godseyeview.layerapi.Layer
 import com.godseyeview.layerapi.LayerDataSource
 import com.godseyeview.layerapi.MapPoint
 import com.godseyeview.layerapi.PointStyle
+import com.godseyeview.layerapi.LatLonBox
 import com.godseyeview.layerapi.QualityProfileHolder
+import com.godseyeview.layerapi.ViewportState
+import com.godseyeview.layerapi.VisibleCap
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -32,8 +35,25 @@ class VesselsLayer(
     internal val store = VesselStore()
     internal val client = AisStreamClient(store)
 
+    /** Q25 (issue #40): the core cap-filters this layer's snapshot
+     *  before render, and the AIS subscription itself follows the
+     *  filter cap's bounding box (see [onViewportChanged]). */
+    override val viewportFiltered: Boolean = true
+
+    /** The subscription area for the current filter cap: its bounding
+     *  box(es) — two on an antimeridian wrap — or the global box
+     *  before the first camera report. */
+    internal fun desiredBoxes(): List<LatLonBox> =
+        ViewportState.filterCap?.boundingBoxes()?.takeIf { it.isNotEmpty() }
+            ?: listOf(LatLonBox.GLOBAL)
+
+    override fun onViewportChanged(filterCap: VisibleCap?) {
+        client.updateBoundingBoxes(desiredBoxes())
+    }
+
     override fun onEnabled() {
         val key = keyProvider()?.takeIf { it.isNotBlank() } ?: return
+        client.updateBoundingBoxes(desiredBoxes())
         client.start(key)
     }
 
@@ -46,6 +66,10 @@ class VesselsLayer(
         if (key.isNullOrBlank()) {
             throw IllegalStateException("AISStream key needed — add it in Power Up")
         }
+        // Q25 poll path: the core refreshes the filter cap before this
+        // fetch runs; keep the subscription area in step (no-op when
+        // the boxes did not change).
+        client.updateBoundingBoxes(desiredBoxes())
         if (!client.everReceived) {
             throw IllegalStateException("Connecting to AISStream…")
         }
