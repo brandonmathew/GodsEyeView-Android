@@ -19,13 +19,28 @@ import java.util.concurrent.TimeUnit
  *  `server/providers/vessels/ais-live.js`, minus AidsToNavigationReport —
  *  aids are not vessels and this layer does not draw them). Built as a
  *  function so tests can assert the exact shape sent on the wire. */
-fun subscriptionJson(apiKey: String): String = buildJsonObject {
+fun subscriptionJson(apiKey: String): String =
+    subscriptionJson(apiKey, listOf(com.godseyeview.layerapi.LatLonBox.GLOBAL))
+
+/** Subscription for a specific set of bounding boxes (Q25, issue #40):
+ *  the viewport filter cap's box — one box normally, two when it wraps
+ *  the antimeridian, the global box before the first camera report. */
+fun subscriptionJson(
+    apiKey: String,
+    boxes: List<com.godseyeview.layerapi.LatLonBox>,
+): String = buildJsonObject {
     put("APIKey", JsonPrimitive(apiKey))
     put("BoundingBoxes", buildJsonArray {
-        add(buildJsonArray {
-            add(buildJsonArray { add(JsonPrimitive(-90)); add(JsonPrimitive(-180)) })
-            add(buildJsonArray { add(JsonPrimitive(90)); add(JsonPrimitive(180)) })
-        })
+        for (box in boxes) {
+            add(buildJsonArray {
+                add(buildJsonArray {
+                    add(coord(box.minLat)); add(coord(box.minLon))
+                })
+                add(buildJsonArray {
+                    add(coord(box.maxLat)); add(coord(box.maxLon))
+                })
+            })
+        }
     })
     put("FilterMessageTypes", buildJsonArray {
         add(JsonPrimitive("PositionReport"))
@@ -35,6 +50,15 @@ fun subscriptionJson(apiKey: String): String = buildJsonObject {
         add(JsonPrimitive("StaticDataReport"))
     })
 }.toString()
+
+/** A box coordinate on the wire: whole degrees stay integers, as the
+ *  original worldwide subscription wrote them (-90, not -90.0). */
+private fun coord(value: Double): JsonPrimitive =
+    if (value == Math.floor(value) && Math.abs(value) < 1e15) {
+        JsonPrimitive(value.toLong())
+    } else {
+        JsonPrimitive(value)
+    }
 
 /** Owns the per-phone AISStream WebSocket (plan Q2: no backend — the
  *  phone connects directly with the user's own key). Reconnects with
@@ -61,6 +85,30 @@ class AisStreamClient(
     @Volatile private var socket: WebSocket? = null
     private var backoffStep = 0
     private var scheduler: ScheduledExecutorService? = null
+
+    /** The subscription's current bounding boxes (Q25). Starts global;
+     *  the layer narrows it to the viewport cap's box on refilters. */
+    @Volatile
+    var boundingBoxes: List<com.godseyeview.layerapi.LatLonBox> =
+        listOf(com.godseyeview.layerapi.LatLonBox.GLOBAL)
+        private set
+
+    /** Narrow/widen the subscription area (Q25). Called ONLY on the
+     *  core's hysteresis triggers (refilter or poll) — never per camera
+     *  move. A changed box set is re-sent on the live socket; if the
+     *  socket is down, the next connection's onOpen sends the current
+     *  boxes. Unchanged boxes are a no-op. */
+    @Synchronized
+    fun updateBoundingBoxes(boxes: List<com.godseyeview.layerapi.LatLonBox>) {
+        val normalized = boxes.takeIf { it.isNotEmpty() }
+            ?: listOf(com.godseyeview.layerapi.LatLonBox.GLOBAL)
+        if (normalized == boundingBoxes) return
+        boundingBoxes = normalized
+        val key = apiKey
+        if (started && key != null) {
+            socket?.send(subscriptionJson(key, normalized))
+        }
+    }
 
     @Synchronized
     fun start(key: String) {
@@ -112,7 +160,7 @@ class AisStreamClient(
                 webSocket.close(NORMAL_CLOSE, "stopped")
                 return
             }
-            webSocket.send(subscriptionJson(key))
+            webSocket.send(subscriptionJson(key, boundingBoxes))
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {

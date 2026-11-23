@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.godseyeview.core.globe.GlobeController
+import com.godseyeview.layerapi.Drawable
 import com.godseyeview.layerapi.Entity
 import com.godseyeview.layerapi.FetchState
 import com.godseyeview.layerapi.FollowTarget
@@ -12,6 +13,7 @@ import com.godseyeview.layerapi.Layer
 import com.godseyeview.layerapi.LayerRegistry
 import com.godseyeview.layerapi.MapPoint
 import com.godseyeview.layerapi.SystemWorldClock
+import com.godseyeview.layerapi.ViewportState
 import com.godseyeview.layerapi.WorldClock
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
@@ -42,6 +44,9 @@ class LayerManager(
     private val pending = mutableMapOf<String, ScheduledFuture<*>>()
     private val failures = mutableMapOf<String, Int>()
     private val entities = mutableMapOf<String, Map<String, Entity>>()
+    /** Last UNfiltered fetch result per layer (Q25): a camera-driven
+     *  refilter re-derives the rendered set from this without refetching. */
+    private val lastDrawables = mutableMapOf<String, List<Drawable>>()
     @Volatile private var paused = false
 
     fun isEnabled(layerId: String): Boolean = enabled[layerId] == true
@@ -69,6 +74,7 @@ class LayerManager(
             pending.remove(layer.id)?.cancel(false)
             states[layer.id] = FetchState.Idle
             entities.remove(layer.id)
+            lastDrawables.remove(layer.id)
             if (selectedEntity?.layerId == layer.id) select(null)
             if (followTarget?.layerId == layer.id) setFollow(null)
             controller.clearLayer(layer.id)
@@ -186,9 +192,12 @@ class LayerManager(
         try {
             val drawables = layer.dataSource.fetch()
             val now = clock.nowMillis()
-            entities[layer.id] = drawables.filterIsInstance<MapPoint>()
-                .associate { it.entity.id to it.entity }
-            controller.renderLayer(layer.id, drawables)
+            lastDrawables[layer.id] = drawables
+            // Q25: a poll is a refilter trigger — refresh the filter
+            // cap from the latest camera before filtering this result,
+            // and let the other opted-in layers know it moved.
+            if (ViewportState.onPoll()) notifyViewportChanged()
+            renderFiltered(layer, drawables)
             states[layer.id] = FetchState.Fresh(now)
             failures[layer.id] = 0
             scheduleStaleFlip(layer, now)
@@ -204,6 +213,75 @@ class LayerManager(
                 (1L shl minOf(count, 3))
             scheduleFetch(layer, minOf(backoff, 5.minutes.inWholeMilliseconds))
         }
+    }
+
+    /** Camera-settle feed (Q25): MainActivity forwards every camera
+     *  report here (already debounced in the WebView + moveEnd). The
+     *  core's hysteresis decides whether this is a refilter; if it is,
+     *  every enabled opted-in layer re-derives its rendered set from
+     *  its last fetch — no refetch, no per-frame work. */
+    fun onCameraView(latitude: Double, longitude: Double, heightMeters: Double) {
+        if (!ViewportState.updateCamera(latitude, longitude, heightMeters)) return
+        val cap = ViewportState.filterCap
+        for (layer in registry.all()) {
+            if (!layer.viewportFiltered || !isEnabled(layer.id)) continue
+            runCatching { layer.onViewportChanged(cap) }
+            val raw = lastDrawables[layer.id] ?: continue
+            renderFiltered(layer, raw)
+        }
+    }
+
+    /** Tell every enabled opted-in layer the filter cap changed
+     *  (poll-driven path; camera-driven refilters notify inline). */
+    private fun notifyViewportChanged() {
+        val cap = ViewportState.filterCap
+        for (layer in registry.all()) {
+            if (!layer.viewportFiltered || !isEnabled(layer.id)) continue
+            runCatching { layer.onViewportChanged(cap) }
+        }
+    }
+
+    /** Filter (when the layer opted in) and render one fetch result,
+     *  rebuilding the pick-resolution entity store from exactly what
+     *  was rendered — so a count or a pick always matches the screen.
+     *  Selection integrity (Q25): the selected entity is never filtered
+     *  out from under its open card; it stays rendered and resolvable
+     *  until the user deselects or disables the layer. */
+    private fun renderFiltered(layer: Layer, drawables: List<Drawable>) {
+        if (layer.rendersViaJsModule) {
+            // JS-module layers draw themselves via layer messages;
+            // renderLayer would clear their rendering (see Layer API).
+            // Their picks arrive as ready-made cards, so the entity
+            // store stays empty for them, as it was when their fetch
+            // returned no drawables.
+            entities[layer.id] = emptyMap()
+            return
+        }
+        val toRender = filterDrawables(layer, drawables)
+        entities[layer.id] = toRender.filterIsInstance<MapPoint>()
+            .associate { it.entity.id to it.entity }
+        controller.renderLayer(layer.id, toRender)
+    }
+
+    private fun filterDrawables(layer: Layer, drawables: List<Drawable>): List<Drawable> {
+        if (!layer.viewportFiltered) return drawables
+        val cap = ViewportState.filterCap ?: return drawables
+        if (cap.isGlobal) return drawables
+        val selected = selectedEntity?.takeIf { it.layerId == layer.id }
+        val kept = drawables.filter { drawable ->
+            // Only points are position-culled; tracks/polygons/labels
+            // pass through (no opted-in layer emits them today).
+            drawable !is MapPoint || cap.contains(drawable.entity.position)
+        }
+        if (selected == null || kept.any { it is MapPoint && it.entity.id == selected.id }) {
+            return kept
+        }
+        // The selected entity left the cap: keep its point rendered so
+        // the open card never points at nothing.
+        val selectedPoint = drawables.firstOrNull {
+            it is MapPoint && it.entity.id == selected.id
+        } ?: return kept
+        return kept + selectedPoint
     }
 
     /** Flip Fresh -> Stale when the TTL passes with no newer fetch. */

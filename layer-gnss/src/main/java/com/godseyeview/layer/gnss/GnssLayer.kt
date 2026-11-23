@@ -32,6 +32,10 @@ class GnssLayer(
     override val freshnessTtl = 2.minutes
     override val credit: String = "adsb.lol (ODbL) · gpsjam.org method"
 
+    /** Renders in its JS module (issue #40: the core must not
+     *  drawable-render this layer — see the Layer API contract). */
+    override val rendersViaJsModule: Boolean = true
+
     override val dataSource: LayerDataSource = LayerDataSource {
         val lat = Math.round(ViewAnchor.latitude)
         val lon = Math.round(ViewAnchor.longitude)
