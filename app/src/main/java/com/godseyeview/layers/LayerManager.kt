@@ -62,6 +62,8 @@ class LayerManager(
         enabled[layer.id] = on
         if (on) {
             failures[layer.id] = 0
+            // Stage 2 (issue #24): live layers open connections here.
+            runCatching { layer.onEnabled() }
             scheduleFetch(layer, 0)
         } else {
             pending.remove(layer.id)?.cancel(false)
@@ -70,7 +72,30 @@ class LayerManager(
             if (selectedEntity?.layerId == layer.id) select(null)
             if (followTarget?.layerId == layer.id) setFollow(null)
             controller.clearLayer(layer.id)
+            runCatching { layer.onDisabled() }
         }
+    }
+
+    /** Stage 2 (issue #24): a JS-module layer (satellites, GNSS) renders
+     *  itself in the WebView and reports its own picks with a ready-made
+     *  card entity. Null deselects. */
+    fun onPickedWithCard(layerId: String, entity: Entity?) {
+        if (entity == null) {
+            if (selectedEntity?.layerId == layerId) select(null)
+            return
+        }
+        select(entity)
+    }
+
+    /** Stage 2 (issue #24): panel toggles for a layer's boolean settings.
+     *  The layer owns the state; [settingsTick] just makes the panel
+     *  recompose. */
+    var settingsTick by mutableStateOf(0)
+        private set
+
+    fun setSetting(layer: Layer, settingId: String, value: Boolean) {
+        layer.setSetting(settingId, value)
+        settingsTick++
     }
 
     /** Backgrounding pauses polling; foregrounding refetches any enabled
@@ -100,7 +125,29 @@ class LayerManager(
             return
         }
         val baseId = entityId.removeSuffix(":track").removeSuffix(":polygon")
-        select(entities[layerId]?.get(baseId))
+        val entity = entities[layerId]?.get(baseId)
+        select(entity)
+        // Stage 2 (issue #24): selection enrichment (e.g. adsbdb route
+        // for the one tapped aircraft) runs on the background executor;
+        // the merged fields land only if the selection is still this
+        // entity when the lookup returns.
+        if (entity != null) {
+            val layer = registry.get(layerId)
+            if (layer != null) {
+                executor.execute {
+                    val extra = runCatching { layer.enrich(entity) }
+                        .getOrDefault(emptyList())
+                    if (extra.isNotEmpty() &&
+                        selectedEntity?.layerId == entity.layerId &&
+                        selectedEntity?.id == entity.id
+                    ) {
+                        selectedEntity = entity.copy(
+                            cardFields = entity.cardFields + extra,
+                        )
+                    }
+                }
+            }
+        }
     }
 
     fun select(entity: Entity?) {

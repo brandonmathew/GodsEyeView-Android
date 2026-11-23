@@ -17,7 +17,8 @@
   var bridge = window.AndroidBridge || {
     onGlobeReady: function () {}, onCameraChanged: function () {},
     onBasemapChanged: function () {}, onError: function () {},
-    onDiagnostics: function () {}, onEntityPicked: function () {}
+    onDiagnostics: function () {}, onEntityPicked: function () {},
+    onEntityCard: function () {}
   };
 
   /* Issue #12 diagnostics: every JS error is forwarded to the app instead
@@ -502,18 +503,26 @@
     drawables.forEach(function (d, index) {
       var ent = null;
       if (d.type === 'point') {
-        ent = viewer.entities.add({
+        /* Stage 2 (issue #24): per-point styling from the layer —
+           colour / pixel size / label on-off; defaults as before. */
+        var st = d.style || {};
+        var pointOpts = {
           id: layerId + ':' + d.entity.id,
           position: Cesium.Cartesian3.fromDegrees(
             d.entity.position.longitude, d.entity.position.latitude,
             d.entity.position.altitude || 0),
           point: {
-            pixelSize: 11, color: layerPointColor(),
+            pixelSize: st.pixelSize || 11,
+            color: st.color
+              ? Cesium.Color.fromCssColorString(st.color) : layerPointColor(),
             outlineColor: Cesium.Color.WHITE, outlineWidth: 2,
             heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
-          },
-          label: labelStyle(d.entity.title, -20)
-        });
+          }
+        };
+        if (st.showLabel !== false) {
+          pointOpts.label = labelStyle(d.entity.title, -20);
+        }
+        ent = viewer.entities.add(pointOpts);
       } else if (d.type === 'track') {
         ent = viewer.entities.add({
           id: layerId + ':' + d.entityId + ':track',
@@ -525,14 +534,20 @@
           }
         });
       } else if (d.type === 'polygon') {
+        var pst = d.style || {};
+        var fill = pst.fillColor
+          ? Cesium.Color.fromCssColorString(pst.fillColor) : layerLineColor();
         ent = viewer.entities.add({
           id: layerId + ':' + d.entityId + ':polygon',
           polygon: {
             hierarchy: new Cesium.PolygonHierarchy(d.vertices.map(function (p) {
               return Cesium.Cartesian3.fromDegrees(p.longitude, p.latitude, p.altitude || 0);
             })),
-            material: layerLineColor().withAlpha(0.25),
-            outline: true, outlineColor: layerLineColor()
+            material: fill.withAlpha(
+              typeof pst.fillAlpha === 'number' ? pst.fillAlpha : 0.25),
+            outline: true,
+            outlineColor: pst.outlineColor
+              ? Cesium.Color.fromCssColorString(pst.outlineColor) : layerLineColor()
           }
         });
       } else if (d.type === 'label') {
@@ -551,6 +566,11 @@
     }
   }
   function clearLayer(layerId) {
+    /* Stage 2 (issue #24): JS-module layers clear their own rendering. */
+    var mod = window.GEVLayers && window.GEVLayers[layerId];
+    if (mod && mod.onClear) {
+      try { mod.onClear(); } catch (e) { noteError('layer ' + layerId + ' onClear: ' + e.message); }
+    }
     var ids = layerEntityIds[layerId] || [];
     if (viewer.trackedEntity && ids.indexOf(viewer.trackedEntity.id) >= 0) {
       viewer.trackedEntity = undefined;
@@ -575,10 +595,22 @@
   var pickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   pickHandler.setInputAction(function (movement) {
     var picked = viewer.scene.pick(movement.position);
-    var id = picked && picked.id && picked.id.id;
+    /* Entity picks carry an Entity object whose .id is the namespaced
+       string; primitive picks (Stage 2 JS-module layers) carry the
+       namespaced string as the primitive's id directly. JS-module
+       layers may also install their own pick handling and report a
+       ready-made card through bridge.onEntityCard — if a module claims
+       this pick, the generic route stays out of the way. */
+    var rawId = picked && picked.id;
+    var id = typeof rawId === 'string' ? rawId : (rawId && rawId.id);
     if (typeof id === 'string' && id.indexOf(':') > 0) {
       var sep = id.indexOf(':');
-      bridge.onEntityPicked(id.substring(0, sep), id.substring(sep + 1));
+      var layerId = id.substring(0, sep);
+      var mod = window.GEVLayers && window.GEVLayers[layerId];
+      if (mod && mod.onPick && mod.onPick(id.substring(sep + 1), movement.position)) {
+        return;
+      }
+      bridge.onEntityPicked(layerId, id.substring(sep + 1));
     } else {
       bridge.onEntityPicked('', '');
     }
@@ -593,6 +625,13 @@
     },
     renderLayer: renderLayer,
     clearLayer: clearLayer,
+    layerMessage: function (layerId, payload) {
+      var mod = window.GEVLayers && window.GEVLayers[layerId];
+      if (mod && mod.onMessage) {
+        try { mod.onMessage(payload); }
+        catch (e) { noteError('layer ' + layerId + ' onMessage: ' + e.message); }
+      }
+    },
     setFollow: setFollow,
     flyTo: flyTo,
     showPin: showPin,
@@ -710,6 +749,22 @@
       ionError = 'world terrain: ' + (e && e.message || e);
     });
   }
+
+  /* Stage 2 (issue #24): JS layer modules. A module script (loaded
+     after this file) registers itself as
+       window.GEVLayers[layerId] = { onMessage, onClear, onPick }
+     onMessage(payload) receives Kotlin payloads sent through
+     GlobeController.sendLayerMessage; onClear() runs when the core
+     clears the layer; onPick(entityId, screenPos) may claim a pick and
+     answer with a ready-made card via bridge.onEntityCard (return
+     true), or decline (return false) and let the generic pick route
+     run. GEVInternal gives modules the viewer and bridge. */
+  window.GEVLayers = window.GEVLayers || {};
+  window.GEVInternal = {
+    viewer: viewer,
+    bridge: bridge,
+    noteError: noteError
+  };
 
   enableTerrarium();
   bridge.onGlobeReady();

@@ -152,34 +152,62 @@ fun LayerPanel(
 private fun LayerRow(layer: Layer, manager: LayerManager) {
     val enabled = manager.isEnabled(layer.id)
     val state = manager.states[layer.id]
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = layer.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = GevColors.TextPrimary,
-            )
-            Text(
-                text = stateText(enabled, state),
-                style = MaterialTheme.typography.bodyMedium,
-                color = GevColors.TextSecondary,
-            )
-            Text(
-                text = layer.credit,
-                style = MaterialTheme.typography.bodySmall,
-                color = GevColors.TextSecondary,
+    // Reading settingsTick subscribes this row to setting changes.
+    @Suppress("UNUSED_EXPRESSION") manager.settingsTick
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = layer.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = GevColors.TextPrimary,
+                )
+                Text(
+                    text = stateText(enabled, state),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = GevColors.TextSecondary,
+                )
+                Text(
+                    text = layer.credit,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = GevColors.TextSecondary,
+                )
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = { manager.setEnabled(layer, it) },
             )
         }
-        Switch(
-            checked = enabled,
-            onCheckedChange = { manager.setEnabled(layer, it) },
-        )
+        // Stage 2 (issue #24): the layer's own boolean settings
+        // (upstream's layer-row params), shown while the layer is on.
+        if (enabled) {
+            layer.settings.forEach { setting ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .padding(start = 16.dp, top = 2.dp, bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = setting.label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = GevColors.TextSecondary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = layer.settingValue(setting.id),
+                        onCheckedChange = { manager.setSetting(layer, setting.id, it) },
+                    )
+                }
+            }
+        }
     }
 }
 

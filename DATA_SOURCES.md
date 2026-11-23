@@ -23,11 +23,26 @@ their own terms. The same list appears in the app under Settings → Credits.
 | Photon (Komoot) | Keyless place search fallback | Search data is OpenStreetMap data © OpenStreetMap contributors, ODbL. https://photon.komoot.io |
 | Nominatim | Keyless place search, second fallback | OpenStreetMap data © OpenStreetMap contributors, ODbL; Nominatim usage policy applies. https://operations.osmfoundation.org/policies/nominatim/ |
 
+## Live movement data (Stage 2)
+
+| Source | What the app uses it for | Terms |
+| --- | --- | --- |
+| OpenSky Network | Live flight state vectors (anonymous access) | OpenSky Network terms; data for non-commercial use with attribution. https://opensky-network.org |
+| adsb.lol | Flight regional fallback, military flights, GNSS integrity snapshots | Open Database License (ODbL). https://www.adsb.lol |
+| adsbdb | Selected-aircraft enrichment (route by callsign, aircraft by hex) | adsbdb terms. https://www.adsbdb.com |
+| CelesTrak | Satellite TLE catalogues (GP groups) | CelesTrak terms; TLE data from the US Space Force catalogue. https://celestrak.org |
+| AISStream | Live vessel AIS (only with the user's own AISStream key) | AISStream terms of service. https://aisstream.io |
+| gpsjam.org (method) | GNSS integrity cell aggregation formula and bands | Method as published at https://gpsjam.org/faq; the per-aircraft classifier is this app's own (see the GNSS layer card). |
+
 ## Libraries
 
 | Library | What the app uses it for | License |
 | --- | --- | --- |
 | CesiumJS 1.147.0 (pinned, bundled in the APK) | Renders the globe in the WebView | Apache License 2.0. https://github.com/CesiumGS/cesium |
+| satellite.js 6.0.2 (bundled) | SGP4 satellite propagation in the WebView (the upstream app's own library) | BSD-3-Clause. https://github.com/davidcalhoun/satellite.js |
+| h3-js 4.1.0 (bundled) | H3 hexagonal cell geometry for the GNSS integrity layer | Apache License 2.0. https://github.com/uber/h3-js |
+| OkHttp 4.12.0 | AISStream WebSocket client | Apache License 2.0. https://square.github.io/okhttp/ |
+| kotlinx-serialization-json 1.7.3 | JSON parsing in layer modules | Apache License 2.0. https://github.com/Kotlin/kotlinx.serialization |
 | Jetpack Compose / AndroidX | Native UI, WebView, FileProvider | Apache License 2.0. |
 | Kotlin | App language | Apache License 2.0. |
 
