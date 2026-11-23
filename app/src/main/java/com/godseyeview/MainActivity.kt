@@ -72,6 +72,46 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+/** Stage 2 (issue #24): parse a JS-module layer's card payload into an
+ *  Entity for the core detail card. "{}" (or anything malformed) means
+ *  deselect. Payload shape: {"id","title","latitude","longitude",
+ *  "altitude","fields":[{"label","value"}]}. */
+private fun parseBridgeCard(
+    layerId: String,
+    cardJson: String,
+): com.godseyeview.layerapi.Entity? {
+    val obj = runCatching { org.json.JSONObject(cardJson) }.getOrNull()
+        ?: return null
+    val id = obj.optString("id")
+    if (id.isEmpty()) return null
+    val fieldsJson = obj.optJSONArray("fields")
+    val fields = buildList {
+        if (fieldsJson != null) {
+            for (i in 0 until fieldsJson.length()) {
+                val f = fieldsJson.optJSONObject(i) ?: continue
+                add(
+                    com.godseyeview.layerapi.CardField(
+                        f.optString("label"), f.optString("value"),
+                    ),
+                )
+            }
+        }
+    }
+    return runCatching {
+        com.godseyeview.layerapi.Entity(
+            id = id,
+            layerId = layerId,
+            position = com.godseyeview.layerapi.GeoPoint(
+                latitude = obj.optDouble("latitude", 0.0),
+                longitude = obj.optDouble("longitude", 0.0),
+                altitude = obj.optDouble("altitude", 0.0),
+            ),
+            title = obj.optString("title", id),
+            cardFields = fields,
+        )
+    }.getOrNull()
+}
+
 private fun GlobeScreen() {
     val context = LocalContext.current
     val store = remember { LastViewStore(context) }
@@ -182,8 +222,50 @@ private fun GlobeScreen() {
        simply idles and the Layers panel shows its empty state. */
     val layerManager = remember {
         com.godseyeview.layers.LayerManager(
-            registry = com.godseyeview.layerapi.LayerRegistry(),
+            registry = com.godseyeview.layerapi.LayerRegistry().apply {
+                // Stage 2 Movement layers (issues #25-#29).
+                register(com.godseyeview.layer.flights.FlightsLayer())
+                register(com.godseyeview.layer.military.MilitaryLayer())
+                register(
+                    com.godseyeview.layer.satellites.SatellitesLayer(
+                        cacheDir = java.io.File(context.filesDir, "tle-cache"),
+                        catalogSink = { json ->
+                            controller.sendLayerMessage("satellites", json)
+                        },
+                    ),
+                )
+                register(
+                    com.godseyeview.layer.vessels.VesselsLayer(
+                        keyProvider = {
+                            keyVault.load(
+                                com.godseyeview.settings.ProviderKey.AISSTREAM,
+                            )
+                        },
+                    ),
+                )
+                register(
+                    com.godseyeview.layer.gnss.GnssLayer(
+                        rowsSink = { json ->
+                            controller.sendLayerMessage("gnss-integrity", json)
+                        },
+                    ),
+                )
+            },
             controller = controller,
+        )
+    }
+    /* Stage 2 (issue #24): publish the resolved quality profile's caps
+       for layers whenever the effective mode changes (Q21 — one shared
+       profile, set in Settings, read by every layer). */
+    androidx.compose.runtime.LaunchedEffect(effectiveQuality) {
+        com.godseyeview.layerapi.QualityProfileHolder.setTier(
+            when (effectiveQuality) {
+                com.godseyeview.settings.QualityMode.HIGH ->
+                    com.godseyeview.layerapi.QualityTier.HIGH
+                com.godseyeview.settings.QualityMode.BATTERY_SAVER ->
+                    com.godseyeview.layerapi.QualityTier.BATTERY_SAVER
+                else -> com.godseyeview.layerapi.QualityTier.BALANCED
+            },
         )
     }
     /* First-run mission picker (issue #10, Q20): shown until the user
@@ -343,6 +425,11 @@ private fun GlobeScreen() {
             onCameraChanged = { view ->
                 currentView = view
                 store.save(view)
+                // Stage 2 (issue #24): view-anchored layers (GNSS, the
+                // flights regional fallback) read the anchor in fetch().
+                com.godseyeview.layerapi.ViewAnchor.update(
+                    view.latitude, view.longitude,
+                )
             },
             onBasemapChanged = { newBasemap ->
                 basemap = newBasemap
@@ -358,6 +445,11 @@ private fun GlobeScreen() {
             },
             onEntityPicked = { layerId, entityId ->
                 layerManager.onPicked(layerId, entityId)
+            },
+            onEntityCard = { layerId, cardJson ->
+                layerManager.onPickedWithCard(
+                    layerId, parseBridgeCard(layerId, cardJson),
+                )
             },
             // The WebView stops above the dock plus a clear strip, so
             // the Cesium credit line at the page's bottom edge sits in

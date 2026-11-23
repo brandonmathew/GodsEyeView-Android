@@ -19,7 +19,43 @@ interface Layer {
     val credit: String
     /** The layer's data source. The core decides when [LayerDataSource.fetch] runs. */
     val dataSource: LayerDataSource
+
+    /** Called by the core when the user turns the layer on, before the
+     *  first fetch (Stage 2, issue #24). Layers with live connections
+     *  (e.g. a WebSocket) open them here. Default: nothing. */
+    fun onEnabled() {}
+
+    /** Called by the core when the user turns the layer off, after its
+     *  drawables are cleared. Live connections close here. */
+    fun onDisabled() {}
+
+    /** Extra detail-card fields for one selected entity, computed on the
+     *  core's background executor at selection time (Stage 2, issue #24).
+     *  For lookups that must not run for every entity (e.g. a per-aircraft
+     *  route query). Returned fields are appended to the entity's own.
+     *  Default: none. */
+    fun enrich(entity: Entity): List<CardField> = emptyList()
+
+    /** Boolean settings the panel shows under the layer's row while it is
+     *  enabled (upstream's layer-row params, e.g. satellite class
+     *  visibility). Default: none. */
+    val settings: List<LayerSetting>
+        get() = emptyList()
+
+    /** Current value of a setting from [settings]. */
+    fun settingValue(id: String): Boolean = false
+
+    /** Apply a panel toggle. The layer owns the state and any side
+     *  effects (e.g. telling its JS module to hide a class). */
+    fun setSetting(id: String, value: Boolean) {}
 }
+
+/** One boolean layer-row setting (Stage 2, issue #24). */
+data class LayerSetting(
+    val id: String,
+    val label: String,
+    val defaultValue: Boolean,
+)
 
 fun interface LayerDataSource {
     /** Return the layer's current drawables. Throwing marks the fetch failed;
