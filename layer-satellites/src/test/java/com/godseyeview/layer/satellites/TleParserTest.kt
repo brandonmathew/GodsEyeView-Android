@@ -134,13 +134,18 @@ class TleParserTest {
         )
         layer.setSetting("starlink", true)
         assertTrue(layer.settingValue("starlink"))
-        assertEquals(1, pushed.size)
-        val root = Json.parseToJsonElement(pushed.single()).jsonObject
+        // Q25 (issue #40): setSetting pushes the classes payload, then
+        // re-pushes the viewport so the JS subset (cap x visible
+        // classes) is re-derived with the new class state.
+        assertEquals(2, pushed.size)
+        val root = Json.parseToJsonElement(pushed[0]).jsonObject
         assertEquals("classes", root["type"]?.jsonPrimitive?.content)
         val visibility = root["visibility"]!!.jsonObject
         assertEquals(
             "true",
             visibility["starlink"]?.jsonPrimitive?.content,
         )
+        val viewport = Json.parseToJsonElement(pushed[1]).jsonObject
+        assertEquals("viewport", viewport["type"]?.jsonPrimitive?.content)
     }
 }
