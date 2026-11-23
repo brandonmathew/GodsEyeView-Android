@@ -16,12 +16,18 @@ data class QualityCaps(
     val maxPointsPerLayer: Int,
     /** Whether heavy optional catalogues (the Starlink shell) may load. */
     val loadDenseCatalogues: Boolean,
+    /** Viewport filtering (Q25): the visible cap's angular radius is
+     *  multiplied by this factor before filtering, so a margin of
+     *  off-screen data is kept rendered and panning does not pop
+     *  entities in at the edges. HIGH keeps the widest margin,
+     *  BATTERY_SAVER the tightest. */
+    val viewportMarginFactor: Double,
 ) {
     companion object {
         fun forTier(tier: QualityTier): QualityCaps = when (tier) {
-            QualityTier.HIGH -> QualityCaps(tier, 20_000, true)
-            QualityTier.BALANCED -> QualityCaps(tier, 12_000, true)
-            QualityTier.BATTERY_SAVER -> QualityCaps(tier, 5_000, false)
+            QualityTier.HIGH -> QualityCaps(tier, 20_000, true, 1.35)
+            QualityTier.BALANCED -> QualityCaps(tier, 12_000, true, 1.20)
+            QualityTier.BATTERY_SAVER -> QualityCaps(tier, 5_000, false, 1.05)
         }
     }
 }
