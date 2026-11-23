@@ -430,6 +430,12 @@ private fun GlobeScreen() {
                 com.godseyeview.layerapi.ViewAnchor.update(
                     view.latitude, view.longitude,
                 )
+                // Q25 (issue #40): viewport filtering — the core's
+                // hysteresis decides whether this settled camera report
+                // refilters the opted-in layers.
+                layerManager.onCameraView(
+                    view.latitude, view.longitude, view.heightMeters,
+                )
             },
             onBasemapChanged = { newBasemap ->
                 basemap = newBasemap
