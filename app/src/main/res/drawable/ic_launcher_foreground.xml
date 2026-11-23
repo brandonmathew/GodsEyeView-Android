@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive icon foreground: the techy eye (108x108 grid).
+     Angular HUD eye outline in cyan, globe iris (circle + meridian +
+     latitude) in light, cyan pupil core, reticle ticks at the cardinal
+     points. Same coordinates as the SVG source in
+     app/src/main/ic_launcher-source/ic_launcher.svg.
+     Safe zone: eye + globe sit inside the central 66dp circle
+     (x/y 22..86); only the reticle ticks extend past it, by design. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Reticle ticks, cardinal points -->
+    <path
+        android:pathData="M54,9 v7 M54,92 v7 M9,54 h7 M92,54 h7"
+        android:strokeColor="#00D4FF"
+        android:strokeWidth="4"
+        android:strokeLineCap="square" />
+
+    <!-- Angular eye outline -->
+    <path
+        android:pathData="M22,54 L42,36 L66,36 L86,54 L66,72 L42,72 Z"
+        android:fillColor="#1400D4FF"
+        android:strokeColor="#00D4FF"
+        android:strokeWidth="5"
+        android:strokeLineJoin="miter" />
+
+    <!-- Globe iris: outline circle -->
+    <path
+        android:pathData="M39.5,54 a14.5,14.5 0 1,0 29,0 a14.5,14.5 0 1,0 -29,0"
+        android:strokeColor="#E8EAED"
+        android:strokeWidth="2.8" />
+    <!-- Globe iris: meridian -->
+    <path
+        android:pathData="M54,39.5 a6,14.5 0 1,0 0,29 a6,14.5 0 1,0 0,-29"
+        android:strokeColor="#E8EAED"
+        android:strokeWidth="2.2" />
+    <!-- Globe iris: latitude -->
+    <path
+        android:pathData="M39.5,54 a14.5,5.5 0 1,0 29,0 a14.5,5.5 0 1,0 -29,0"
+        android:strokeColor="#E8EAED"
+        android:strokeWidth="2.2" />
+
+    <!-- Pupil core -->
+    <path
+        android:pathData="M49.8,54 a4.2,4.2 0 1,0 8.4,0 a4.2,4.2 0 1,0 -8.4,0 Z"
+        android:fillColor="#00D4FF" />
+</vector>
