@@ -8,12 +8,14 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -31,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.godseyeview.R
@@ -65,10 +68,31 @@ import com.godseyeview.core.ui.Kicker
  *  - Short (<640dp): content 504dp + 64dp bar = 568dp. The lead drops
  *    to bodySmall (2 lines) rather than reintroducing scroll.
  *  So the picker fits without scrolling down to ~570dp of offered
- *  height at phone widths ≥360dp. Below that (landscape phones,
- *  ~360–430dp tall) the fixed content genuinely cannot fit; the tiers
- *  bottom out at the Short budget instead of scrolling. Narrower
- *  screens (<360dp wide) can add one title line (~+32dp). */
+ *  height at phone widths ≥360dp. Narrower screens (<360dp wide) can
+ *  add one title line (~+32dp).
+ *
+ *  LANDSCAPE (offered width > height; Brandon-approved two-column
+ *  design, issue #10 follow-up): the portrait stack genuinely cannot
+ *  fit a ~360dp-tall screen, so the layout changes shape instead of
+ *  shrinking — header row (kicker + SKIP) across the top, a text
+ *  column on the left (title, lead, start heading, helper line,
+ *  suppress row) and the four mission tiles in a 2×2 grid on the
+ *  right with ENTER GOD MODE under the grid. Still no scrolling.
+ *  Budget (default font scale): header row 40dp (the SKIP TextButton)
+ *  + top/bottom padding; the right column's fixed content is the grid
+ *  (2 rows of 78dp tiles + gap) + the 48dp ENTER button = 212–218dp;
+ *  the left column's worst case is title 64 (2 lines) + lead 80
+ *  (4 lines bodyMedium at ~260dp column width) + heading 16 + helper
+ *  32 (2 lines) + suppress row 48 + gaps = 268dp. Regular landscape
+ *  tier total = 8 + 40 + 6 + 268 + 8 = 330dp; the compact tier (lead
+ *  drops to bodySmall, gaps compress) totals 4 + 40 + 2 + 222 + 4 =
+ *  272dp. So landscape fits without scrolling down to ~275dp of
+ *  offered height at widths ≥~700dp; weighted spacers absorb surplus
+ *  above the budgets. In the grid cells the longest caps title
+ *  ("EXPLORE MANUALLY") drops from titleMedium to titleSmall — and
+ *  to labelMedium in cells narrower than 160dp — rather than
+ *  wrapping; below ~275dp height (extreme split-screen) the compact
+ *  budget bottoms out, as portrait's does. */
 @Composable
 fun MissionPickerScreen(
     initialMission: Mission = Mission.EXPLORE,
@@ -84,6 +108,18 @@ fun MissionPickerScreen(
         modifier = modifier.fillMaxSize(),
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            if (maxWidth > maxHeight) {
+                LandscapePickerContent(
+                    selected = selected,
+                    onSelect = { selected = it },
+                    suppress = suppress,
+                    onSuppressChange = { suppress = it },
+                    onEnter = { onEnter(selected, suppress) },
+                    onSkip = { onSkip(suppress) },
+                    compact = maxHeight < LANDSCAPE_COMPACT_MIN_HEIGHT,
+                )
+                return@BoxWithConstraints
+            }
             val layout = when {
                 maxHeight >= PickerLayout.REGULAR_MIN_HEIGHT ->
                     PickerLayout.Regular
@@ -220,6 +256,163 @@ fun MissionPickerScreen(
     }
 }
 
+/** Offered height below which landscape switches to its compact tier
+ *  (the regular landscape budget totals 330dp). */
+private val LANDSCAPE_COMPACT_MIN_HEIGHT = 330.dp
+
+/** The landscape two-column picker (see the budget in
+ *  [MissionPickerScreen]'s doc). Same content, same behaviour — only
+ *  the arrangement changes: text column left, 2×2 tile grid + ENTER
+ *  right, both columns bottom-anchoring their last element with a
+ *  weighted spacer so the two columns line up on tall screens. */
+@Composable
+private fun LandscapePickerContent(
+    selected: Mission,
+    onSelect: (Mission) -> Unit,
+    suppress: Boolean,
+    onSuppressChange: (Boolean) -> Unit,
+    onEnter: () -> Unit,
+    onSkip: () -> Unit,
+    compact: Boolean,
+) {
+    val layout =
+        if (compact) PickerLayout.LandscapeCompact else PickerLayout.Landscape
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp)
+            .padding(top = layout.topPadding, bottom = layout.bottomPadding),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Kicker(
+                text = stringResource(R.string.firstrun_kicker),
+                color = GevColors.Accent,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onSkip) {
+                Text(
+                    text = stringResource(R.string.firstrun_skip),
+                    color = GevColors.Accent,
+                )
+            }
+        }
+        Spacer(Modifier.height(layout.afterHeader))
+        Row(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(0.8f)
+                    .fillMaxHeight(),
+            ) {
+                Text(
+                    text = stringResource(R.string.firstrun_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = GevColors.TextPrimary,
+                )
+                Spacer(Modifier.height(layout.afterTitle))
+                Text(
+                    text = stringResource(R.string.firstrun_lead),
+                    style = if (layout.smallLead) {
+                        MaterialTheme.typography.bodySmall
+                    } else {
+                        MaterialTheme.typography.bodyMedium
+                    },
+                    color = GevColors.TextSecondary,
+                )
+                Spacer(Modifier.weight(1f))
+                Kicker(text = stringResource(R.string.firstrun_start_heading))
+                Spacer(Modifier.height(layout.afterHeading))
+                Text(
+                    text = stringResource(R.string.firstrun_change_later),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = GevColors.TextSecondary,
+                )
+                Spacer(Modifier.height(layout.afterHelper))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clickable { onSuppressChange(!suppress) },
+                ) {
+                    Checkbox(
+                        checked = suppress,
+                        onCheckedChange = onSuppressChange,
+                    )
+                    Text(
+                        text = stringResource(R.string.firstrun_suppress),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = GevColors.TextPrimary,
+                    )
+                }
+            }
+            Spacer(Modifier.width(20.dp))
+            Column(
+                modifier = Modifier
+                    .weight(1.2f)
+                    .fillMaxHeight(),
+            ) {
+                Row {
+                    MissionTile(
+                        title = stringResource(R.string.firstrun_live_title),
+                        sub = stringResource(R.string.firstrun_live_sub),
+                        selected = selected == Mission.LIVE_CONTACTS,
+                        onClick = { onSelect(Mission.LIVE_CONTACTS) },
+                        layout = layout,
+                        grid = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(layout.tileGap))
+                    MissionTile(
+                        title = stringResource(R.string.firstrun_space_title),
+                        sub = stringResource(R.string.firstrun_space_sub),
+                        selected = selected == Mission.SPACE_MISSIONS,
+                        onClick = { onSelect(Mission.SPACE_MISSIONS) },
+                        layout = layout,
+                        grid = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(Modifier.height(layout.tileGap))
+                Row {
+                    MissionTile(
+                        title = stringResource(
+                            R.string.firstrun_environmental_title,
+                        ),
+                        sub = stringResource(R.string.firstrun_environmental_sub),
+                        selected = selected == Mission.ENVIRONMENTAL,
+                        onClick = { onSelect(Mission.ENVIRONMENTAL) },
+                        layout = layout,
+                        grid = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(layout.tileGap))
+                    MissionTile(
+                        title = stringResource(R.string.firstrun_explore_title),
+                        sub = stringResource(R.string.firstrun_explore_sub),
+                        selected = selected == Mission.EXPLORE,
+                        onClick = { onSelect(Mission.EXPLORE) },
+                        layout = layout,
+                        grid = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Button(
+                    onClick = onEnter,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(layout.buttonHeight),
+                ) {
+                    Text(
+                        text = stringResource(R.string.firstrun_enter),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
+        }
+    }
+}
+
 /** Spacing/size tiers for the no-scroll picker, chosen from the offered
  *  height. Tile heights keep every tile a ≥48dp touch target while its
  *  text (title 24dp + 2dp + sub) fits exactly: Regular subs are
@@ -263,6 +456,26 @@ private enum class PickerLayout(
         bottomPadding = 4.dp, barPadding = 8.dp, buttonHeight = 48.dp,
         smallLead = true, smallSub = true,
     ),
+
+    /** Landscape two-column tiers: [tileGap] doubles as the grid's
+     *  horizontal and vertical gap, [afterTiles]/[barPadding] go unused
+     *  (ENTER sits in the right column, not a bottom bar). The 78dp
+     *  grid tile fits title 20 (titleSmall, 1 line) + 2 + sub 48
+     *  (3 lines bodySmall) + 3dp padding top/bottom = 76dp. */
+    Landscape(
+        topPadding = 8.dp, afterHeader = 6.dp, afterTitle = 6.dp,
+        afterHeading = 8.dp, tileHeight = 78.dp, tilePaddingV = 3.dp,
+        tileGap = 8.dp, afterTiles = 0.dp, afterHelper = 6.dp,
+        bottomPadding = 8.dp, barPadding = 0.dp, buttonHeight = 48.dp,
+        smallLead = false, smallSub = true,
+    ),
+    LandscapeCompact(
+        topPadding = 4.dp, afterHeader = 2.dp, afterTitle = 2.dp,
+        afterHeading = 4.dp, tileHeight = 78.dp, tilePaddingV = 3.dp,
+        tileGap = 6.dp, afterTiles = 0.dp, afterHelper = 4.dp,
+        bottomPadding = 4.dp, barPadding = 0.dp, buttonHeight = 48.dp,
+        smallLead = true, smallSub = true,
+    ),
     ;
 
     companion object {
@@ -281,10 +494,12 @@ private fun MissionTile(
     selected: Boolean,
     onClick: () -> Unit,
     layout: PickerLayout,
+    grid: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(layout.tileHeight)
             .background(
@@ -300,11 +515,31 @@ private fun MissionTile(
             .padding(horizontal = 16.dp, vertical = layout.tilePaddingV),
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = GevColors.TextPrimary,
-            )
+            if (grid) {
+                // Grid cells are ~half the portrait tile width: the
+                // longest caps title needs titleSmall here (and
+                // labelMedium in very narrow cells) to stay on one
+                // line — wrapping it would break the fixed tile height.
+                BoxWithConstraints {
+                    Text(
+                        text = title,
+                        style = if (maxWidth >= 160.dp) {
+                            MaterialTheme.typography.titleSmall
+                        } else {
+                            MaterialTheme.typography.labelMedium
+                        },
+                        color = GevColors.TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            } else {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = GevColors.TextPrimary,
+                )
+            }
             Spacer(Modifier.height(2.dp))
             Text(
                 text = sub,
