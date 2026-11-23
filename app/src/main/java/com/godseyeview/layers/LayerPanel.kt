@@ -192,7 +192,7 @@ private fun LayerRow(layer: Layer, manager: LayerManager) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
-                        .padding(start = 16.dp, vertical = 2.dp),
+                        .padding(start = 16.dp, top = 2.dp, bottom = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
