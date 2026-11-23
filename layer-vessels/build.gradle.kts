@@ -1,0 +1,14 @@
+plugins {
+    id("org.jetbrains.kotlin.jvm")
+}
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
+dependencies {
+    implementation(project(":layer-api"))
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    testImplementation("junit:junit:4.13.2")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+}

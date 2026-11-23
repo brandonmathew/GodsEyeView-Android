@@ -21,5 +21,12 @@
 <body>
 <div id="cesiumContainer"></div>
 <script src="globe.js"></script>
+<!-- Stage 2 (issue #24): vendored libraries for JS layer modules —
+     satellite.js 6.0.2 (upstream's SGP4 library, exposes `satellite`)
+     and h3-js 4.1.0 (upstream's H3 library, exposes `h3`). -->
+<script src="vendor/satellite.min.js"></script>
+<script src="vendor/h3-js.umd.js"></script>
+<script src="layers/satellites.js"></script>
+<script src="layers/gnss.js"></script>
 </body>
 </html>

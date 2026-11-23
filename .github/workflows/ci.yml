@@ -27,7 +27,7 @@ jobs:
         # compile failure fails all 3 attempts and still fails the run.
         run: |
           for attempt in 1 2 3; do
-            if ./gradlew :layer-api:test :core-globe:testDebugUnitTest :core-ui:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug --console=plain; then
+            if ./gradlew :layer-api:test :layer-flights:test :layer-military:test :layer-satellites:test :layer-vessels:test :layer-gnss:test :core-globe:testDebugUnitTest :core-ui:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug --console=plain; then
               exit 0
             fi
             if [ "$attempt" -lt 3 ]; then

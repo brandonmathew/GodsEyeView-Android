@@ -39,6 +39,7 @@ fun CesiumGlobe(
     onDiagnostics: (String) -> Unit = {},
     onConsoleMessage: (String) -> Unit = {},
     onEntityPicked: (layerId: String, entityId: String?) -> Unit = { _, _ -> },
+    onEntityCard: (layerId: String, cardJson: String) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     val assetLoader = remember {
@@ -76,6 +77,15 @@ fun CesiumGlobe(
             @JavascriptInterface
             fun onEntityPicked(layerId: String, entityId: String) {
                 onEntityPicked(layerId, entityId.ifEmpty { null })
+            }
+
+            /* Stage 2 (issue #24): JS-module layers (satellites, GNSS)
+               render themselves and report picks as a ready-made card:
+               {"id","title","latitude","longitude","altitude",
+               "fields":[{"label","value"}]} — or "{}" for deselect. */
+            @JavascriptInterface
+            fun onEntityCard(layerId: String, cardJson: String) {
+                onEntityCard(layerId, cardJson)
             }
         }
     }

@@ -100,6 +100,16 @@ class GlobeController {
     fun clearLayer(layerId: String) =
         eval("window.GEV && window.GEV.clearLayer(${org.json.JSONObject.quote(layerId)})")
 
+    /** Stage 2 (issue #24): send a JSON payload to a JS layer module
+     *  registered in the globe page (window.GEVLayers[layerId]). Used by
+     *  layers whose rendering lives in an adapted upstream JS module
+     *  (satellites, GNSS); [payloadJson] must be a valid JSON text. */
+    fun sendLayerMessage(layerId: String, payloadJson: String) =
+        eval(
+            "window.GEV && window.GEV.layerMessage(" +
+                "${org.json.JSONObject.quote(layerId)}, $payloadJson)",
+        )
+
     /** Issue #44/#46: follow a layer entity with the camera (or stop). */
     fun setFollow(layerId: String, entityId: String?) =
         eval(
@@ -128,6 +138,13 @@ class GlobeController {
                         .put("title", drawable.entity.title)
                         .put("position", pointJson(drawable.entity.position)),
                 )
+                .put(
+                    "style",
+                    org.json.JSONObject()
+                        .put("color", drawable.style.colorHex ?: org.json.JSONObject.NULL)
+                        .put("pixelSize", drawable.style.pixelSize ?: org.json.JSONObject.NULL)
+                        .put("showLabel", drawable.style.showLabel),
+                )
             is com.godseyeview.layerapi.Track -> org.json.JSONObject()
                 .put("type", "track")
                 .put("entityId", drawable.entityId)
@@ -136,6 +153,13 @@ class GlobeController {
                 .put("type", "polygon")
                 .put("entityId", drawable.entityId)
                 .put("vertices", pointsJson(drawable.vertices))
+                .put(
+                    "style",
+                    org.json.JSONObject()
+                        .put("fillColor", drawable.fillColorHex ?: org.json.JSONObject.NULL)
+                        .put("fillAlpha", drawable.fillAlpha)
+                        .put("outlineColor", drawable.outlineColorHex ?: org.json.JSONObject.NULL),
+                )
             is com.godseyeview.layerapi.MapLabel -> org.json.JSONObject()
                 .put("type", "label")
                 .put("text", drawable.text)

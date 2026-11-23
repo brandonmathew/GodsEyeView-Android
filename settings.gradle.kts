@@ -21,3 +21,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "GodsEyeViewAndroidV2"
 include(":app", ":core-globe", ":core-ui", ":layer-api")
+// Stage 2 Movement layers (issues #25-#29).
+include(":layer-flights", ":layer-military", ":layer-satellites", ":layer-vessels", ":layer-gnss")
