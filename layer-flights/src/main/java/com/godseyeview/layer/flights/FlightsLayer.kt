@@ -8,8 +8,11 @@ import com.godseyeview.layerapi.Layer
 import com.godseyeview.layerapi.LayerDataSource
 import com.godseyeview.layerapi.MapPoint
 import com.godseyeview.layerapi.PointStyle
+import com.godseyeview.layerapi.LatLonBox
 import com.godseyeview.layerapi.QualityProfileHolder
 import com.godseyeview.layerapi.ViewAnchor
+import com.godseyeview.layerapi.ViewportState
+import com.godseyeview.layerapi.VisibleCap
 import com.godseyeview.layerapi.adsb.AdsbRecord
 import com.godseyeview.layerapi.adsb.OpenSkyParser
 import com.godseyeview.layerapi.adsb.ReadsbParser
@@ -43,18 +46,23 @@ class FlightsLayer(
 
     override val dataSource: LayerDataSource = LayerDataSource { fetchFlights() }
 
+    /** Q25 (issue #40): the core cap-filters this layer's points
+     *  between fetch and render; the fetch itself also asks OpenSky
+     *  for just the visible box when the cap is sub-hemisphere. */
+    override val viewportFiltered: Boolean = true
+
     override fun enrich(entity: Entity): List<CardField> = enrichment.enrich(entity)
 
     private fun fetchFlights(): List<Drawable> {
-        val cap = QualityProfileHolder.caps.maxPointsPerLayer
+        val maxPoints = QualityProfileHolder.caps.maxPointsPerLayer
         var openskyError: Exception? = null
         try {
-            val body = http.get(OPENSKY_STATES_URL)
+            val body = http.get(openskyUrl(ViewportState.filterCap))
             val records = OpenSkyParser.parse(body)
             if (records.isEmpty()) {
                 throw IllegalStateException("OpenSky returned no usable aircraft")
             }
-            return toPoints(records, cap, id)
+            return toPoints(records, maxPoints, id)
         } catch (e: Exception) {
             openskyError = e
         }
@@ -69,7 +77,7 @@ class FlightsLayer(
             )
             val body = http.get(url)
             val records = ReadsbParser.parse(body, snapshotNowMs(body))
-            return toPoints(records, cap, id)
+            return toPoints(records, maxPoints, id)
         } catch (fallbackError: Exception) {
             throw openskyError ?: fallbackError
         }
@@ -79,6 +87,26 @@ class FlightsLayer(
         const val OPENSKY_STATES_URL =
             "https://opensky-network.org/api/states/all?extended=1"
     }
+}
+
+/** The OpenSky request URL for the current filter cap (Q25): the
+ *  cap's bounding box when the cap is smaller than a hemisphere and
+ *  its box does not wrap the antimeridian; the global states URL
+ *  otherwise (no cap yet, hemisphere cap, or a wrapped box — the
+ *  core's client-side cap filter still applies to the global result). */
+internal fun openskyUrl(filterCap: VisibleCap?): String {
+    if (filterCap == null || filterCap.isGlobal) return FlightsLayer.OPENSKY_STATES_URL
+    val boxes = filterCap.boundingBoxes()
+    if (boxes.size != 1 || boxes[0] == LatLonBox.GLOBAL) {
+        return FlightsLayer.OPENSKY_STATES_URL
+    }
+    val box = boxes[0]
+    return String.format(
+        Locale.US,
+        "%s&lamin=%.4f&lamax=%.4f&lomin=%.4f&lomax=%.4f",
+        FlightsLayer.OPENSKY_STATES_URL,
+        box.minLat, box.maxLat, box.minLon, box.maxLon,
+    )
 }
 
 /** adsb.lol `now` is epoch seconds (fractional); >1e10 means it is already ms. */
