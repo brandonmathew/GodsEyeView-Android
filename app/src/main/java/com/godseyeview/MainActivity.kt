@@ -71,7 +71,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable
 /** Stage 2 (issue #24): parse a JS-module layer's card payload into an
  *  Entity for the core detail card. "{}" (or anything malformed) means
  *  deselect. Payload shape: {"id","title","latitude","longitude",
@@ -112,6 +111,7 @@ private fun parseBridgeCard(
     }.getOrNull()
 }
 
+@Composable
 private fun GlobeScreen() {
     val context = LocalContext.current
     val store = remember { LastViewStore(context) }
